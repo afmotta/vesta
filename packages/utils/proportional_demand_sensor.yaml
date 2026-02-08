@@ -1,0 +1,108 @@
+# =============================================================================
+# Component: proportional_demand_sensor.yaml
+# Purpose:   Convert any sensor reading into a 0-100% demand signal with
+#            configurable bounds and optional rate-of-change boost
+#
+# Required vars:
+#   component_id         - Prefix for entity IDs (e.g., "ventilation")
+#   component_name       - Friendly name prefix (e.g., "Ventilation")
+#   demand_slug          - Short name for demand type (e.g., "humidity", "co2")
+#   demand_name          - Friendly name for demand type (e.g., "Humidity")
+#   source_sensor_id     - ID of the sensor to monitor
+#   min_output_id        - ID of the minimum output threshold sensor
+#   lower_bound_entity   - HA entity ID for lower bound (e.g., input_number.humidity_lower)
+#   upper_bound_entity   - HA entity ID for upper bound (e.g., input_number.humidity_upper)
+#
+# Optional vars:
+#   rate_multiplier      - Multiplier for the rate boost (default: 0.0 = disabled)
+#   window_size          - Smoothing window for trend sensor (default: 15)
+#   unit_of_measurement  - Output unit (default: "%")
+#   icon                 - MDI icon (default: "mdi:gauge")
+#   accuracy_decimals    - Decimal precision (default: 0)
+#   fallback_value       - Value to return on error (default: 20.0)
+#
+# Dependencies:
+#   - trend_sensor.yaml (included automatically, must be in same directory)
+#
+# Exposes:
+#   sensor.{component_id}_{demand_slug}_demand - Calculated demand percentage
+#   sensor.{component_id}_{demand_slug}_rate   - Rate of change (via trend_sensor)
+#
+# Example:
+#   packages:
+#     humidity_demand: !include
+#       file: packages/utils/proportional_demand_sensor.yaml
+#       vars:
+#         component_id: "ventilation"
+#         component_name: "Ventilation"
+#         demand_slug: "humidity"
+#         demand_name: "Humidity"
+#         source_sensor_id: bathroom_humidity
+#         min_output_id: ventilation_min_speed
+#         lower_bound_entity: "input_number.humidity_lower_bound"
+#         upper_bound_entity: "input_number.humidity_upper_bound"
+#         rate_multiplier: "5.0"
+# =============================================================================
+
+defaults:
+  rate_multiplier: "0.0"
+  window_size: "15"
+  unit_of_measurement: "%"
+  icon: "mdi:gauge"
+  accuracy_decimals: "0"
+  fallback_value: "20.0"
+
+packages:
+  trend_sensor: !include
+    file: trend_sensor.yaml
+    vars:
+      sensor_id: ${component_id}_${demand_slug}_rate
+      source_sensor: ${source_sensor_id}
+      sensor_name: "${component_name} ${demand_name} Rate"
+      unit_of_measurement: "${unit_of_measurement}/min"
+      window_size: ${window_size}
+
+sensor:
+  - platform: homeassistant
+    entity_id: ${lower_bound_entity}
+    id: ${component_id}_${demand_slug}_lower
+    internal: true
+
+  - platform: homeassistant
+    entity_id: ${upper_bound_entity}
+    id: ${component_id}_${demand_slug}_upper
+    internal: true
+
+  - platform: template
+    id: ${component_id}_${demand_slug}_demand
+    name: "${component_name} ${demand_name} Demand"
+    unit_of_measurement: "${unit_of_measurement}"
+    icon: "${icon}"
+    accuracy_decimals: ${accuracy_decimals}
+    update_interval: 60s
+    lambda: |-
+      float val = id(${source_sensor_id}).state;
+      float min_fan = id(${min_output_id}).state;
+      float lower = id(${component_id}_${demand_slug}_lower).state;
+      float upper = id(${component_id}_${demand_slug}_upper).state;
+
+      if (isnan(val) || isnan(min_fan) || isnan(lower) || isnan(upper) || (upper <= lower)) {
+        return ${fallback_value}f;
+      }
+
+      // Base proportional demand
+      float position = (val - lower) / (upper - lower);
+      position = std::max(0.0f, std::min(1.0f, position));
+      float base_demand = min_fan + (position * (100.0f - min_fan));
+
+      // Optional Rate boost
+      float boost = 0.0f;
+      float multiplier = (float)${rate_multiplier};
+      if (multiplier > 0.0f) {
+        float rate = id(${component_id}_${demand_slug}_rate).state;
+        if (!isnan(rate)) {
+          boost = std::max(0.0f, rate * multiplier);
+        }
+      }
+
+      return std::min(100.0f, base_demand + boost);
