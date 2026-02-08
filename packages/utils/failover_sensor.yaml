@@ -1,0 +1,125 @@
+# =============================================================================
+# Component: failover_sensor.yaml
+# Purpose:   3-tier sensor failover (Primary → Secondary → Emergency) for
+#            reliable climate control when sensor sources fail
+#
+# Required vars:
+#   sensor_id            - ID for the abstracted output sensor
+#   sensor_name          - Friendly name (e.g., "Living Room Temperature")
+#   unit_of_measurement  - Output unit (e.g., "°C", "%")
+#   device_class         - HA device class (e.g., "temperature", "humidity")
+#   primary_sensor       - ID of the primary sensor source
+#   secondary_sensor     - ID of the secondary/fallback sensor source
+#
+# Optional vars:
+#   internal             - Hide from HA (default: true)
+#   accuracy_decimals    - Decimal precision (default: 1)
+#   update_interval      - How often to evaluate failover (default: 10s)
+#
+# Exposes:
+#   sensor.{sensor_id}              - Abstracted value from active tier
+#   text_sensor.{sensor_id}_sensor_tier - Active tier name for diagnostics
+#
+# Tier Priority:
+#   | Primary  | Secondary | Active Tier | Output      |
+#   |----------|-----------|-------------|-------------|
+#   | Valid    | Valid     | Primary     | Primary val |
+#   | Valid    | NaN      | Primary     | Primary val |
+#   | NaN     | Valid     | Secondary   | Secondary   |
+#   | NaN     | NaN      | Emergency   | NaN         |
+#
+# Example:
+#   packages:
+#     temp_failover: !include
+#       file: packages/utils/failover_sensor.yaml
+#       vars:
+#         sensor_id: "living_room_temp"
+#         sensor_name: "Living Room Temperature"
+#         unit_of_measurement: "°C"
+#         device_class: "temperature"
+#         primary_sensor: ha_living_room_temp
+#         secondary_sensor: udp_living_room_temp
+# =============================================================================
+
+defaults:
+  internal: "true"
+  accuracy_decimals: "1"
+  update_interval: "10s"
+
+sensor:
+  - platform: template
+    id: ${sensor_id}
+    name: "${sensor_name}"
+    internal: ${internal}
+    unit_of_measurement: ${unit_of_measurement}
+    accuracy_decimals: ${accuracy_decimals}
+    device_class: ${device_class}
+    state_class: measurement
+    update_interval: ${update_interval}
+    lambda: |-
+      static std::string last_tier = "";
+      std::string current_tier;
+      float value;
+
+      // Tier 1: Primary sensor
+      if (!isnan(id(${primary_sensor}).state)) {
+        current_tier = "Primary";
+        value = id(${primary_sensor}).state;
+
+        if (last_tier != current_tier) {
+          if (last_tier == "Secondary") {
+            ESP_LOGI("failover", "[%s] Recovery: Secondary → Primary (primary sensor restored)", "${sensor_id}");
+          } else if (last_tier == "Emergency") {
+            ESP_LOGI("failover", "[%s] Recovery: Emergency → Primary (primary sensor restored)", "${sensor_id}");
+          } else if (last_tier == "") {
+            ESP_LOGD("failover", "[%s] Initial state: Tier 1 (Primary)", "${sensor_id}");
+          }
+          last_tier = current_tier;
+        }
+
+        id(${sensor_id}_sensor_tier).publish_state(current_tier);
+        return value;
+      }
+
+      // Tier 2: Secondary sensor (fallback)
+      if (!isnan(id(${secondary_sensor}).state)) {
+        current_tier = "Secondary";
+        value = id(${secondary_sensor}).state;
+
+        if (last_tier != current_tier) {
+          if (last_tier == "Primary") {
+            ESP_LOGI("failover", "[%s] Failover: Primary → Secondary (primary sensor unavailable)", "${sensor_id}");
+          } else if (last_tier == "Emergency") {
+            ESP_LOGI("failover", "[%s] Recovery: Emergency → Secondary (secondary sensor restored)", "${sensor_id}");
+          } else if (last_tier == "") {
+            ESP_LOGD("failover", "[%s] Initial state: Tier 2 (Secondary)", "${sensor_id}");
+          }
+          last_tier = current_tier;
+        }
+
+        id(${sensor_id}_sensor_tier).publish_state(current_tier);
+        return value;
+      }
+
+      // Tier 3: Emergency (all sensors unavailable)
+      current_tier = "Emergency";
+
+      if (last_tier != current_tier) {
+        if (last_tier == "Secondary") {
+          ESP_LOGE("failover", "[%s] Failover: Secondary → Emergency (all sensors unavailable)", "${sensor_id}");
+        } else if (last_tier == "Primary") {
+          ESP_LOGE("failover", "[%s] Failover: Primary → Emergency (all sensors unavailable)", "${sensor_id}");
+        } else if (last_tier == "") {
+          ESP_LOGE("failover", "[%s] Initial state: Tier 3 (Emergency - no valid sensors)", "${sensor_id}");
+        }
+        last_tier = current_tier;
+      }
+
+      id(${sensor_id}_sensor_tier).publish_state(current_tier);
+      return NAN;
+
+text_sensor:
+  - platform: template
+    id: ${sensor_id}_sensor_tier
+    name: "${sensor_name} Active Sensor Tier"
+    icon: "mdi:chart-timeline-variant"
