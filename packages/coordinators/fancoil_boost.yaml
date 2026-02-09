@@ -1,0 +1,324 @@
+# =============================================================================
+# Component: fancoil_boost.yaml
+# Purpose:   "Base + Boost" coordinator - automatically activates fancoils when
+#            radiant floor cooling reaches its limits. Radiant provides efficient
+#            baseline; fancoils activate as a responsive boost layer.
+#
+# Required vars:
+#   zone_slug                    - Zone identifier for entity IDs (e.g., "living_room")
+#   zone_name                    - Human-readable zone name (e.g., "Living Room")
+#   temperature_sensor           - ID of the zone temperature sensor
+#   humidity_sensor              - ID of the zone humidity sensor
+#   radiant_pid_id               - ID of the radiant PID climate entity
+#   radiant_pid_cool_sensor      - ID of the PID cool output sensor (0-1 range)
+#   fancoil_pid_id               - ID of the fancoil PID climate entity
+#   radiant_override_value_id    - ID of the number entity for radiant override %
+#   radiant_override_switch_id   - ID of the switch to enable/disable override
+#   radiant_pwm_id               - ID of the slow PWM output for radiant
+#   cooling_mode_sensor          - ID of the binary sensor for cooling season
+#   temp_threshold_sensor        - ID of the sensor providing temp delta threshold
+#   humidity_threshold_sensor    - ID of the sensor providing humidity threshold
+#   predictive_minutes_sensor    - ID of the sensor providing predictive boost minutes
+#
+# Optional vars:
+#   min_time_in_state_seconds    - Anti-cycling minimum (default: 600 = 10 min)
+#   humidity_hysteresis          - Dead band around humidity threshold (default: 5.0)
+#   saturated_output_threshold   - PID output level = "saturated" (default: 0.95)
+#
+# Dependencies:
+#   - ../utils/trend_sensor.yaml (included automatically)
+#
+# Activation Triggers (OR logic - any one triggers boost):
+#   1. Reactive:   temp delta > threshold (room too warm for radiant)
+#   2. Reactive:   humidity > threshold + hysteresis/2 (limits radiant capacity)
+#   3. Predictive: radiant output saturated for X min AND temp not decreasing
+#
+# Deactivation (AND logic - both must be satisfied):
+#   - Temperature: delta <= 0 (target reached)
+#   - Humidity:    <= threshold - hysteresis/2 (below dead band)
+#
+# Exposes:
+#   binary_sensor.{zone_slug}_boost_active_sensor  - Boost state
+#   text_sensor.{zone_slug}_cooling_mode            - "Fancoil Boost" / "Radiant Only"
+#   sensor.{zone_slug}_temp_delta                   - Temperature delta from target
+#   sensor.{zone_slug}_time_in_mode                 - Minutes in current mode
+#   sensor.{zone_slug}_saturation_duration          - Minutes at PID saturation
+#   sensor.{zone_slug}_radiant_output_pct           - Radiant PID output %
+#   sensor.{zone_slug}_temp_trend                   - Temperature trend (via trend_sensor)
+#
+# Example:
+#   packages:
+#     boost: !include
+#       file: packages/coordinators/fancoil_boost.yaml
+#       vars:
+#         zone_slug: "living_room"
+#         zone_name: "Living Room"
+#         temperature_sensor: living_room_temp
+#         humidity_sensor: living_room_humidity
+#         radiant_pid_id: pid_radiant_living_room
+#         radiant_pid_cool_sensor: pid_radiant_living_room_cool
+#         fancoil_pid_id: pid_fancoil_living_room
+#         radiant_override_value_id: living_room_radiant_override_value
+#         radiant_override_switch_id: living_room_radiant_override
+#         radiant_pwm_id: slow_pwm_living_room
+#         cooling_mode_sensor: summer_mode
+#         temp_threshold_sensor: fancoil_boost_threshold
+#         humidity_threshold_sensor: fancoil_humidity_threshold
+#         predictive_minutes_sensor: predictive_boost_minutes
+# =============================================================================
+
+packages:
+  temp_trend: !include
+    file: ../utils/trend_sensor.yaml
+    vars:
+      sensor_id: ${zone_slug}_temp_trend
+      source_sensor: ${temperature_sensor}
+      sensor_name: "${zone_name} Temperature Trend"
+      unit_of_measurement: "°C/min"
+      accuracy_decimals: "3"
+      internal: "true"
+
+defaults:
+  min_time_in_state_seconds: 600 # 10 minutes
+  humidity_hysteresis: 5.0 # % RH dead band (symmetric around threshold)
+  saturated_output_threshold: 0.95 # Output level considered "saturated" (95%)
+
+globals:
+  - id: ${zone_slug}_boost_active
+    type: bool
+    initial_value: "false"
+    restore_value: true
+  - id: ${zone_slug}_last_mode_change_time
+    type: uint32_t
+    initial_value: "0"
+  - id: ${zone_slug}_saturated_start_time
+    type: uint32_t
+    initial_value: "0"
+
+binary_sensor:
+  - platform: template
+    id: ${zone_slug}_boost_active_sensor
+    name: "${zone_name} Boost Active"
+    device_class: running
+    icon: "mdi:fan"
+    lambda: "return id(${zone_slug}_boost_active);"
+
+text_sensor:
+  - platform: template
+    id: ${zone_slug}_cooling_mode
+    name: "${zone_name} Cooling Mode"
+    icon: "mdi:thermostat"
+    lambda: |-
+      if (id(${zone_slug}_boost_active)) {
+        return {"Fancoil Boost"};
+      }
+      return {"Radiant Only"};
+    update_interval: 5s
+
+sensor:
+  - platform: template
+    id: ${zone_slug}_temp_delta
+    name: "${zone_name} Temperature Delta"
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: "temperature"
+    icon: "mdi:thermometer-lines"
+    lambda: |-
+      float current = id(${temperature_sensor}).state;
+      float target = id(${radiant_pid_id}).target_temperature;
+      if (std::isnan(current) || std::isnan(target)) return NAN;
+      // Positive delta = room is warmer than target (needs cooling)
+      return current - target;
+    update_interval: 30s
+
+  - platform: template
+    id: ${zone_slug}_time_in_mode
+    name: "${zone_name} Time In Mode"
+    unit_of_measurement: "min"
+    accuracy_decimals: 0
+    icon: "mdi:timer"
+    lambda: |-
+      if (id(${zone_slug}_last_mode_change_time) == 0) return 0.0;
+      uint32_t elapsed_ms = millis() - id(${zone_slug}_last_mode_change_time);
+      return elapsed_ms / 60000.0;
+    update_interval: 60s
+
+  - platform: template
+    id: ${zone_slug}_saturation_duration
+    name: "${zone_name} Saturation Duration"
+    unit_of_measurement: "min"
+    accuracy_decimals: 0
+    icon: "mdi:gauge-full"
+    lambda: |-
+      if (id(${zone_slug}_saturated_start_time) == 0) return 0.0;
+      uint32_t elapsed_ms = millis() - id(${zone_slug}_saturated_start_time);
+      return elapsed_ms / 60000.0;
+    update_interval: 30s
+
+  - platform: template
+    id: ${zone_slug}_radiant_output_pct
+    name: "${zone_name} Radiant Output"
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: mdi:percent
+    lambda: |-
+      float output = id(${radiant_pid_cool_sensor}).state;
+      if (std::isnan(output)) return 0.0;
+      return output * 100.0;
+    update_interval: 30s
+
+# Coordinator logic - runs every 30 seconds for responsive predictive boost
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          // Only process during cooling mode (summer)
+          if (!id(${cooling_mode_sensor}).state) {
+            if (id(${zone_slug}_boost_active)) {
+              ESP_LOGI("coordinator", "Exiting boost mode - heating season");
+              id(${zone_slug}_boost_active) = false;
+            }
+            // Reset predictive tracking
+            id(${zone_slug}_saturated_start_time) = 0;
+            return;
+          }
+
+          // Get threshold values
+          float temp_threshold = id(${temp_threshold_sensor}).state;
+          float humidity_threshold = id(${humidity_threshold_sensor}).state;
+          float predictive_minutes = id(${predictive_minutes_sensor}).state;
+
+          // Get per-zone values
+          float temp_delta = id(${zone_slug}_temp_delta).state;
+          float humidity = id(${humidity_sensor}).state;
+          float current_temp = id(${temperature_sensor}).state;
+
+          // Get PID output (COOL sensor gives 0-1 output)
+          float radiant_output = id(${radiant_pid_cool_sensor}).state;
+
+          // Check for invalid thresholds
+          if (std::isnan(temp_threshold) || std::isnan(humidity_threshold)) {
+            ESP_LOGW("coordinator", "Invalid threshold(s), skipping");
+            return;
+          }
+
+          uint32_t now = millis();
+          uint32_t min_time_ms = ${min_time_in_state_seconds} * 1000;
+          float humidity_hysteresis = ${humidity_hysteresis};
+          float saturated_threshold = ${saturated_output_threshold};
+
+          // ================================================================
+          // PREDICTIVE BOOST: Track output saturation duration
+          // ================================================================
+          bool is_saturated = !std::isnan(radiant_output) && radiant_output >= saturated_threshold;
+
+          if (is_saturated && !id(${zone_slug}_boost_active)) {
+            // Start tracking saturation if not already
+            if (id(${zone_slug}_saturated_start_time) == 0) {
+              id(${zone_slug}_saturated_start_time) = now;
+              ESP_LOGD("coordinator", "${zone_slug}: Saturation tracking started (output %.0f%%)", radiant_output * 100);
+            }
+          } else if (!is_saturated) {
+            // Reset saturation tracking when output drops
+            if (id(${zone_slug}_saturated_start_time) != 0) {
+              ESP_LOGD("coordinator", "${zone_slug}: Saturation tracking reset (output %.0f%%)", radiant_output * 100);
+            }
+            id(${zone_slug}_saturated_start_time) = 0;
+          }
+
+          // Calculate saturation duration
+          uint32_t saturated_duration_ms = 0;
+          if (id(${zone_slug}_saturated_start_time) != 0) {
+            saturated_duration_ms = now - id(${zone_slug}_saturated_start_time);
+          }
+          uint32_t predictive_threshold_ms = (uint32_t)(predictive_minutes * 60 * 1000);
+
+          // ================================================================
+          // TEMPERATURE TREND: Check if room is making progress
+          // ================================================================
+          // Only trigger predictive boost if temp is NOT decreasing
+          // This prevents premature boost when radiant IS working, just slowly
+          float trend = id(${zone_slug}_temp_trend).state;
+          // Trend > -0.005°C/min is considered "not making progress" (effectively flat or rising)
+          bool temp_not_decreasing = std::isnan(trend) || trend >= -0.005;
+
+          // ================================================================
+          // BOOST ACTIVATION LOGIC
+          // ================================================================
+          // Need valid temperature delta; humidity can be NaN (we'll skip humidity check if so)
+          if (!std::isnan(temp_delta)) {
+            bool min_time_elapsed = (id(${zone_slug}_last_mode_change_time) == 0 ||
+                                     (now - id(${zone_slug}_last_mode_change_time)) >= min_time_ms);
+
+            if (min_time_elapsed) {
+              // Boost activation: OR logic (any condition triggers boost)
+              // 1. REACTIVE - Temperature too high: room too warm for radiant alone
+              // 2. REACTIVE - Humidity too high: limits radiant capacity
+              // 3. PREDICTIVE - Saturated output: radiant at capacity for too long
+              bool temp_trigger = temp_delta > temp_threshold;
+              float humidity_activate = humidity_threshold + (humidity_hysteresis / 2.0);
+              bool humidity_trigger = !std::isnan(humidity) && humidity > humidity_activate;
+
+              // PREDICTIVE trigger: saturated for X minutes AND not making cooling progress
+              bool predictive_trigger = (saturated_duration_ms >= predictive_threshold_ms) &&
+                                        temp_not_decreasing &&
+                                        (temp_delta > 0);  // Only if still above target
+
+              bool any_trigger = temp_trigger || humidity_trigger || predictive_trigger;
+              if (!id(${zone_slug}_boost_active) && (any_trigger)) {
+                id(${zone_slug}_boost_active) = true;
+                id(${zone_slug}_last_mode_change_time) = now;
+                id(${zone_slug}_saturated_start_time) = 0;  // Reset saturation tracking
+
+                // IMPORTANT: Enable output override to lock radiant at 100%
+                auto value_call = id(${radiant_override_value_id}).make_call();
+                value_call.set_value(100.0);  // 100% open
+                value_call.perform();
+
+                id(${radiant_override_switch_id}).turn_on();
+                id(${radiant_pwm_id}).set_level(1.0);
+
+                // Enable this zone's fancoil
+                auto fancoil_call = id(${fancoil_pid_id}).make_call();
+                fancoil_call.set_mode("COOL");
+                fancoil_call.perform();
+
+                ESP_LOGI("coordinator", "=== ${zone_slug} BOOST ACTIVATED ===");
+                ESP_LOGI("coordinator", "  Temp trigger: %s (delta %.1f > %.1f)",
+                         temp_trigger ? "YES" : "no", temp_delta, temp_threshold);
+                ESP_LOGI("coordinator", "  Humidity trigger: %s (%.0f%% > %.0f%%)",
+                         humidity_trigger ? "YES" : "no", humidity, humidity_activate);
+                ESP_LOGI("coordinator", "  PREDICTIVE trigger: %s (saturated %.0f min >= %.0f min, trend: %s)",
+                         predictive_trigger ? "YES" : "no",
+                         saturated_duration_ms / 60000.0, predictive_minutes,
+                         temp_not_decreasing ? "flat/rising" : "decreasing");
+                ESP_LOGI("coordinator", "Radiant output LOCKED at 100%%, Fancoil COOL");
+              }
+
+              // Boost deactivation: AND logic (both conditions must be satisfied)
+              // - Temperature: target reached (delta <= 0)
+              // - Humidity: below lower bound of hysteresis band
+              bool temp_ok = temp_delta <= 0;
+              float humidity_deactivate = humidity_threshold - (humidity_hysteresis / 2.0);
+              bool humidity_ok = std::isnan(humidity) || humidity <= humidity_deactivate;
+
+              if (id(${zone_slug}_boost_active) && temp_ok && humidity_ok) {
+                id(${zone_slug}_boost_active) = false;
+                id(${zone_slug}_last_mode_change_time) = now;
+
+                // Disable this zone's fancoil
+                auto fancoil_call = id(${fancoil_pid_id}).make_call();
+                fancoil_call.set_mode("OFF");
+                fancoil_call.perform();
+
+                // Release output override - PID will resume control
+                id(${radiant_override_switch_id}).turn_off();
+
+                ESP_LOGI("coordinator", "=== ${zone_name} NORMAL MODE ===");
+                ESP_LOGI("coordinator", "  Temp OK: delta %.1f <= 0", temp_delta);
+                ESP_LOGI("coordinator", "  Humidity OK: %.0f%% <= %.0f%%",
+                         humidity, humidity_deactivate);
+                ESP_LOGI("coordinator", "Radiant output UNLOCKED (PID resumed), Fancoil OFF");
+              }
+            }
+          }
