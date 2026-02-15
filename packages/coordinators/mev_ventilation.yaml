@@ -1,144 +1,62 @@
 # =============================================================================
 # Component: mev_ventilation.yaml
-# Purpose:   MEV (Mechanical Extract Ventilation) coordinator with multi-demand
-#            orchestration (CO2, IAQ, humidity) and humidity cascade state machine
+# Purpose:   MEV (Mechanical Extract Ventilation) controller with humidity
+#            cascade state machine (event-driven with script delays).
+#            Pure controller - no hardware abstraction, no demand calculation.
 #
 # Required vars:
 #   component_id                   - Prefix for entity IDs (e.g., "mev")
 #   component_name                 - Friendly name prefix (e.g., "MEV")
-#   power_relay                    - Relay ID for main power
-#   mode_relay                     - Relay ID for winter/summer mode
-#   dehumidifier_relay             - Relay ID for dehumidifier
-#   cooling_relay                  - Relay ID for cooling integration
-#   fan_speed_output               - DAC output ID for 0-10V fan speed
-#   alarm_input                    - Binary sensor ID for alarm monitoring
-#   humidity_sensor                - Sensor ID for humidity input
-#   co2_sensor                     - Sensor ID for CO2 input
-#   iaq_sensor                     - Sensor ID for IAQ input
-#   cooling_mode_sensor            - Binary sensor ID for cooling season
-#   min_fan_speed_entity           - HA entity for minimum fan speed
-#   escalation_threshold_entity    - HA entity for escalation fan threshold
-#   deescalation_threshold_entity  - HA entity for de-escalation fan threshold
+#   demand_sensor                  - Aggregated demand sensor ID (0-100%)
+#   humidity_sensor                - Humidity sensor ID (for de-escalation)
+#   humidity_rate_sensor           - Humidity rate-of-change sensor ID (for escalation)
+#   humidity_lower_sensor          - Humidity lower bound sensor ID (for de-escalation)
+#   cooling_mode_sensor            - Binary sensor ID: true = cooling season
+#   dehumidifier_switch            - Switch ID for dehumidifier control
+#   integration_switch              - Switch ID for integration (cooling) control
+#   alarm_sensor                   - Binary sensor ID for alarm monitoring
+#   fan_speed_number               - Number entity ID for fan speed output
+#   min_fan_speed_entity           - HA entity for minimum fan speed (%)
+#   escalation_threshold_entity    - HA entity for escalation fan threshold (%)
+#   deescalation_threshold_entity  - HA entity for de-escalation fan threshold (%)
 #   escalation_delay_entity        - HA entity for escalation delay (minutes)
 #   deescalation_delay_entity      - HA entity for de-escalation delay (minutes)
-#   co2_lower_bound_entity         - HA entity for CO2 lower bound
-#   co2_upper_bound_entity         - HA entity for CO2 upper bound
-#   iaq_lower_bound_entity         - HA entity for IAQ lower bound
-#   iaq_upper_bound_entity         - HA entity for IAQ upper bound
-#   humidity_lower_bound_entity    - HA entity for humidity lower bound
-#   humidity_upper_bound_entity    - HA entity for humidity upper bound
-#
-# Optional vars:
-#   co2_rate_multiplier            - Rate boost for CO2 demand (default: 0.05)
-#   iaq_rate_multiplier            - Rate boost for IAQ demand (default: 2.0)
-#   humidity_rate_multiplier       - Rate boost for humidity demand (default: 20.0)
-#
-# Dependencies:
-#   - ../utils/proportional_demand_sensor.yaml (3x, auto-included)
-#     └── ../utils/trend_sensor.yaml (auto-included by each demand sensor)
 #
 # Humidity Cascade State Machine (event-driven with script delays):
-#   Fan Only ──escalate──▶ Dehumidifying ──escalate──▶ Cooling
-#   Fan Only ◀──de-escalate── Dehumidifying ◀──de-escalate── Cooling
-#   (Cooling state only available in summer/cooling season)
+#   Fan Only ──escalate──▶ Dehumidifying ──escalate──▶ Integration
+#   Fan Only ◀──de-escalate── Dehumidifying ◀──de-escalate── Integration
+#   (Integration state only available in summer/cooling season)
 #   Transitions use template binary sensors (condition evaluation) +
 #   scripts with mode:restart (delay timers). on_press starts timer,
 #   on_release cancels it.
 #
 # Exposes:
 #   sensor.{component_id}_final_fan_speed       - Calculated fan speed (0-100%)
-#   sensor.{component_id}_co2_demand            - CO2 demand % (via demand sensor)
-#   sensor.{component_id}_iaq_demand            - IAQ demand % (via demand sensor)
-#   sensor.{component_id}_humidity_demand       - Humidity demand % (via demand sensor)
-#   text_sensor.{component_id}_dominant_demand  - Which demand is driving fan speed
 #   text_sensor.{component_id}_automation_state - Current state machine status
 #   select.{component_id}_humidity_state        - Humidity cascade state selector
-#   number.{component_id}_fan_speed             - Fan speed control (0-100%)
-#   switch.{component_id}_power                 - Main power switch
-#   switch.{component_id}_mode                  - Winter/Summer mode switch
-#   switch.{component_id}_dehumidifier          - Dehumidifier switch
-#   switch.{component_id}_cooling               - Cooling integration switch
-#   binary_sensor.{component_id}_alarm          - Alarm monitor
 #
 # Example:
 #   packages:
-#     mev: !include
+#     mev_ctrl: !include
 #       file: packages/coordinators/mev_ventilation.yaml
 #       vars:
 #         component_id: "mev"
 #         component_name: "MEV"
-#         power_relay: relay_1
-#         mode_relay: relay_2
-#         dehumidifier_relay: relay_3
-#         cooling_relay: relay_4
-#         fan_speed_output: dac_1
-#         alarm_input: input_1
+#         demand_sensor: mev_max_demand
 #         humidity_sensor: bathroom_humidity
-#         co2_sensor: living_room_co2
-#         iaq_sensor: living_room_iaq
+#         humidity_rate_sensor: mev_humidity_rate
 #         cooling_mode_sensor: summer_mode
+#         dehumidifier_switch: mev_dehumidifier
+#         integration_switch: mev_integration
+#         alarm_sensor: mev_alarm
+#         fan_speed_number: mev_fan_speed
 #         min_fan_speed_entity: "input_number.mev_min_fan_speed"
 #         escalation_threshold_entity: "input_number.mev_escalation_threshold"
 #         deescalation_threshold_entity: "input_number.mev_deescalation_threshold"
 #         escalation_delay_entity: "input_number.mev_escalation_delay"
 #         deescalation_delay_entity: "input_number.mev_deescalation_delay"
-#         co2_lower_bound_entity: "input_number.co2_lower_bound"
-#         co2_upper_bound_entity: "input_number.co2_upper_bound"
-#         iaq_lower_bound_entity: "input_number.iaq_lower_bound"
-#         iaq_upper_bound_entity: "input_number.iaq_upper_bound"
-#         humidity_lower_bound_entity: "input_number.humidity_lower_bound"
-#         humidity_upper_bound_entity: "input_number.humidity_upper_bound"
+#         humidity_lower_sensor: mev_humidity_lower
 # =============================================================================
-
-defaults:
-  co2_rate_multiplier: "0.05"
-  iaq_rate_multiplier: "2.0"
-  humidity_rate_multiplier: "20.0"
-
-packages:
-  co2_demand: !include
-    file: ../utils/proportional_demand_sensor.yaml
-    vars:
-      component_id: ${component_id}
-      component_name: ${component_name}
-      demand_slug: co2
-      demand_name: CO2
-      unit_of_measurement: ppm
-      source_sensor_id: ${co2_sensor}
-      min_output_id: ${component_id}_min_fan_speed
-      lower_bound_entity: ${co2_lower_bound_entity}
-      upper_bound_entity: ${co2_upper_bound_entity}
-      rate_multiplier: ${co2_rate_multiplier}
-      icon: mdi:molecule-co2
-
-  iaq_demand: !include
-    file: ../utils/proportional_demand_sensor.yaml
-    vars:
-      component_id: ${component_id}
-      component_name: ${component_name}
-      demand_slug: iaq
-      demand_name: IAQ
-      unit_of_measurement: IAQ
-      source_sensor_id: ${iaq_sensor}
-      min_output_id: ${component_id}_min_fan_speed
-      lower_bound_entity: ${iaq_lower_bound_entity}
-      upper_bound_entity: ${iaq_upper_bound_entity}
-      rate_multiplier: ${iaq_rate_multiplier}
-      icon: mdi:air-filter
-
-  humidity_demand: !include
-    file: ../utils/proportional_demand_sensor.yaml
-    vars:
-      component_id: ${component_id}
-      component_name: ${component_name}
-      demand_slug: humidity
-      demand_name: Humidity
-      source_sensor_id: ${humidity_sensor}
-      min_output_id: ${component_id}_min_fan_speed
-      lower_bound_entity: ${humidity_lower_bound_entity}
-      upper_bound_entity: ${humidity_upper_bound_entity}
-      rate_multiplier: ${humidity_rate_multiplier}
-      icon: mdi:water-percent
 
 sensor:
   # Import configuration from HA
@@ -167,7 +85,7 @@ sensor:
     id: ${component_id}_deescalation_delay
     internal: true
 
-  # Final Fan Speed (%) - MAX aggregation of all demands
+  # Final Fan Speed (%) - applies min floor and alarm safety
   - platform: template
     name: "${component_name} Final Fan Speed"
     id: ${component_id}_final_fan_speed
@@ -176,47 +94,25 @@ sensor:
     accuracy_decimals: 0
     update_interval: 60s
     lambda: |-
-      if (id(${component_id}_alarm).state) {
+      if (id(${alarm_sensor}).state) {
         return 0.0f;
       }
 
-      float co2 = id(${component_id}_co2_demand).state;
-      float iaq = id(${component_id}_iaq_demand).state;
-      float humidity = id(${component_id}_humidity_demand).state;
+      float demand = id(${demand_sensor}).state;
       float min_fan = id(${component_id}_min_fan_speed).state;
 
-      // Fallback to min_fan if sensors are unavailable
       if (isnan(min_fan)) min_fan = 20.0f;
-      float f_co2 = isnan(co2) ? min_fan : co2;
-      float f_iaq = isnan(iaq) ? min_fan : iaq;
-      float f_hum = isnan(humidity) ? min_fan : humidity;
+      if (isnan(demand)) demand = min_fan;
 
-      float final_speed = std::max({f_co2, f_iaq, f_hum, min_fan});
-
-      // Update dominant demand diagnostics
-      std::string dominant = "Ventilation";
-      if (final_speed > min_fan) {
-        if (final_speed == f_co2) dominant = "CO2";
-        else if (final_speed == f_iaq) dominant = "IAQ";
-        else if (final_speed == f_hum) dominant = "Humidity";
-      }
-      id(${component_id}_dominant_demand).publish_state(dominant);
-
-      return std::min(100.0f, final_speed);
+      return std::min(100.0f, std::max(demand, min_fan));
     on_value:
       then:
         - number.set:
-            id: ${component_id}_fan_speed
+            id: ${fan_speed_number}
             value: !lambda "return x;"
 
 # Diagnostic Sensors
 text_sensor:
-  - platform: template
-    name: "${component_name} Dominant Demand"
-    id: ${component_id}_dominant_demand
-    icon: mdi:gauge
-    entity_category: diagnostic
-
   - platform: template
     name: "${component_name} Automation State"
     id: ${component_id}_automation_state
@@ -231,7 +127,7 @@ select:
     options:
       - "Fan Only"
       - "Dehumidifying"
-      - "Cooling"
+      - "Integration"
     initial_option: "Fan Only"
     optimistic: true
     restore_value: true
@@ -240,20 +136,20 @@ select:
           condition:
             lambda: 'return x == "Fan Only";'
           then:
-            - switch.turn_off: ${component_id}_dehumidifier
-            - switch.turn_off: ${component_id}_cooling
+            - switch.turn_off: ${dehumidifier_switch}
+            - switch.turn_off: ${integration_switch}
       - if:
           condition:
             lambda: 'return x == "Dehumidifying";'
           then:
-            - switch.turn_on: ${component_id}_dehumidifier
-            - switch.turn_off: ${component_id}_cooling
+            - switch.turn_on: ${dehumidifier_switch}
+            - switch.turn_off: ${integration_switch}
       - if:
           condition:
-            lambda: 'return x == "Cooling";'
+            lambda: 'return x == "Integration";'
           then:
-            - switch.turn_on: ${component_id}_dehumidifier
-            - switch.turn_on: ${component_id}_cooling
+            - switch.turn_on: ${dehumidifier_switch}
+            - switch.turn_on: ${integration_switch}
 
 # State Machine Scripts (with built-in delays)
 # Scripts use mode: restart - restarting resets the delay timer.
@@ -274,18 +170,18 @@ script:
           level: INFO
           tag: mev
 
-  - id: ${component_id}_escalate_to_cooling
+  - id: ${component_id}_escalate_to_integration
     mode: restart
     then:
       - text_sensor.template.publish:
           id: ${component_id}_automation_state
-          state: "Escalating (Cooling)"
+          state: "Escalating (Integration)"
       - delay: !lambda "return id(${component_id}_escalation_delay).state * 60000;"
       - select.set:
           id: ${component_id}_humidity_state
-          option: "Cooling"
+          option: "Integration"
       - logger.log:
-          format: "MEV: Escalated to Cooling"
+          format: "MEV: Escalated to Integration"
           level: INFO
           tag: mev
 
@@ -328,108 +224,12 @@ script:
             id(${component_id}_automation_state).publish_state("Idle");
           } else if (state == "Dehumidifying") {
             id(${component_id}_automation_state).publish_state("Dehumidifying");
-          } else if (state == "Cooling") {
-            id(${component_id}_automation_state).publish_state("Cooling");
+          } else if (state == "Integration") {
+            id(${component_id}_automation_state).publish_state("Integration");
           }
 
-# Fan speed control (0-100% → 0-10V DAC)
-number:
-  - platform: template
-    name: "${component_name} Fan Speed"
-    id: ${component_id}_fan_speed
-    icon: mdi:fan
-    min_value: 0
-    max_value: 100
-    step: 1
-    mode: slider
-    unit_of_measurement: "%"
-    optimistic: true
-    restore_value: true
-    initial_value: 0
-    set_action:
-      - output.set_level:
-          id: ${fan_speed_output}
-          level: !lambda "return x / 100.0;"
-
-# Relay switches for hardware control
-switch:
-  - platform: template
-    name: "${component_name} Power"
-    id: ${component_id}_power
-    icon: mdi:power
-    optimistic: false
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - switch.turn_on: ${power_relay}
-    turn_off_action:
-      - switch.turn_off: ${power_relay}
-    lambda: |-
-      return id(${power_relay}).state;
-
-  - platform: template
-    name: "${component_name} Mode"
-    id: ${component_id}_mode
-    icon: mdi:thermometer
-    optimistic: false
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - switch.turn_on: ${mode_relay}
-    turn_off_action:
-      - switch.turn_off: ${mode_relay}
-    lambda: |-
-      return id(${mode_relay}).state;
-
-  - platform: template
-    name: "${component_name} Dehumidifier"
-    id: ${component_id}_dehumidifier
-    icon: mdi:water-percent
-    optimistic: false
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - switch.turn_on: ${dehumidifier_relay}
-    turn_off_action:
-      - switch.turn_off: ${dehumidifier_relay}
-    lambda: |-
-      return id(${dehumidifier_relay}).state;
-
-  - platform: template
-    name: "${component_name} Cooling"
-    id: ${component_id}_cooling
-    icon: mdi:snowflake
-    optimistic: false
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - switch.turn_on: ${cooling_relay}
-    turn_off_action:
-      - switch.turn_off: ${cooling_relay}
-    lambda: |-
-      return id(${cooling_relay}).state;
-
-# Alarm monitoring
+# State Machine Transition Conditions (event-driven)
 binary_sensor:
-  - platform: template
-    name: "${component_name} Alarm"
-    id: ${component_id}_alarm
-    device_class: problem
-    lambda: |-
-      return id(${alarm_input}).state;
-    on_press:
-      then:
-        - logger.log:
-            level: ERROR
-            format: "MEV ALARM DETECTED on %s"
-            args: ['"${component_name}"']
-        - number.set:
-            id: ${component_id}_fan_speed
-            value: 0
-    on_release:
-      then:
-        - logger.log:
-            level: INFO
-            format: "MEV Alarm cleared on %s"
-            args: ['"${component_name}"']
-
-  # State Machine Transition Conditions (event-driven)
   - platform: template
     name: "${component_name} Should Escalate to Dehumidifying"
     id: ${component_id}_should_escalate_dehum
@@ -437,7 +237,7 @@ binary_sensor:
     lambda: |-
       auto state = id(${component_id}_humidity_state).current_option();
       float fan = id(${component_id}_final_fan_speed).state;
-      float rate = id(${component_id}_humidity_rate).state;
+      float rate = id(${humidity_rate_sensor}).state;
       float thresh = id(${component_id}_escalation_threshold).state;
       if (isnan(fan) || isnan(rate) || isnan(thresh)) return false;
       return state == "Fan Only" && fan >= thresh && rate > 0.0f;
@@ -448,21 +248,21 @@ binary_sensor:
       - script.execute: ${component_id}_update_idle_state
 
   - platform: template
-    name: "${component_name} Should Escalate to Cooling"
-    id: ${component_id}_should_escalate_cooling
+    name: "${component_name} Should Escalate to Integration"
+    id: ${component_id}_should_escalate_integration
     internal: true
     lambda: |-
       auto state = id(${component_id}_humidity_state).current_option();
       float fan = id(${component_id}_final_fan_speed).state;
-      float rate = id(${component_id}_humidity_rate).state;
+      float rate = id(${humidity_rate_sensor}).state;
       float thresh = id(${component_id}_escalation_threshold).state;
       bool summer = id(${cooling_mode_sensor}).state;
       if (isnan(fan) || isnan(rate) || isnan(thresh)) return false;
       return state == "Dehumidifying" && summer && fan >= thresh && rate > 0.0f;
     on_press:
-      - script.execute: ${component_id}_escalate_to_cooling
+      - script.execute: ${component_id}_escalate_to_integration
     on_release:
-      - script.stop: ${component_id}_escalate_to_cooling
+      - script.stop: ${component_id}_escalate_to_integration
       - script.execute: ${component_id}_update_idle_state
 
   - platform: template
@@ -473,11 +273,11 @@ binary_sensor:
       auto state = id(${component_id}_humidity_state).current_option();
       float fan = id(${component_id}_final_fan_speed).state;
       float humidity = id(${humidity_sensor}).state;
-      float lower = id(${component_id}_humidity_lower).state;
+      float lower = id(${humidity_lower_sensor}).state;
       float thresh = id(${component_id}_deescalation_threshold).state;
       bool summer = id(${cooling_mode_sensor}).state;
       if (isnan(fan) || isnan(humidity) || isnan(lower) || isnan(thresh)) return false;
-      return state == "Cooling" && (!summer || (humidity < lower && fan < thresh));
+      return state == "Integration" && (!summer || (humidity < lower && fan < thresh));
     on_press:
       - script.execute: ${component_id}_deescalate_to_dehumidifying
     on_release:
@@ -492,7 +292,7 @@ binary_sensor:
       auto state = id(${component_id}_humidity_state).current_option();
       float fan = id(${component_id}_final_fan_speed).state;
       float humidity = id(${humidity_sensor}).state;
-      float lower = id(${component_id}_humidity_lower).state;
+      float lower = id(${humidity_lower_sensor}).state;
       float thresh = id(${component_id}_deescalation_threshold).state;
       if (isnan(fan) || isnan(humidity) || isnan(lower) || isnan(thresh)) return false;
       return state == "Dehumidifying" && humidity < lower && fan < thresh;

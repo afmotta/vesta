@@ -26,11 +26,11 @@ Primary     Secondary   Emergency
 **Priority table:**
 
 | Primary | Secondary | Active Tier | Output Value |
-|---------|-----------|-------------|--------------|
+| ------- | --------- | ----------- | ------------ |
 | Valid   | Valid     | Primary     | Primary      |
-| Valid   | NaN      | Primary     | Primary      |
+| Valid   | NaN       | Primary     | Primary      |
 | NaN     | Valid     | Secondary   | Secondary    |
-| NaN     | NaN      | Emergency   | NaN          |
+| NaN     | NaN       | Emergency   | NaN          |
 
 **Typical sensor source pairing:**
 - Primary: Home Assistant sensor (proven, fast updates)
@@ -53,17 +53,17 @@ Recovery is automatic and immediate:
 
 ## Parameter Reference
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `sensor_id` | string | Yes | - | Entity ID for the abstracted output sensor |
-| `sensor_name` | string | Yes | - | Friendly name shown in Home Assistant |
-| `unit_of_measurement` | string | Yes | - | Output unit (e.g., `°C`, `%`) |
-| `device_class` | string | Yes | - | HA device class (e.g., `temperature`, `humidity`) |
-| `primary_sensor` | string | Yes | - | ID of the primary sensor source |
-| `secondary_sensor` | string | Yes | - | ID of the secondary/fallback sensor source |
-| `internal` | bool | No | `true` | If `true`, hides the value sensor from HA (tier sensor always visible) |
-| `accuracy_decimals` | int | No | `1` | Decimal precision for displayed value |
-| `update_interval` | string | No | `10s` | How often to evaluate failover logic |
+| Parameter             | Type   | Required | Default | Description                                                            |
+| --------------------- | ------ | -------- | ------- | ---------------------------------------------------------------------- |
+| `sensor_id`           | string | Yes      | -       | Entity ID for the abstracted output sensor                             |
+| `sensor_name`         | string | Yes      | -       | Friendly name shown in Home Assistant                                  |
+| `unit_of_measurement` | string | Yes      | -       | Output unit (e.g., `°C`, `%`)                                          |
+| `device_class`        | string | Yes      | -       | HA device class (e.g., `temperature`, `humidity`)                      |
+| `primary_sensor`      | string | Yes      | -       | ID of the primary sensor source                                        |
+| `secondary_sensor`    | string | Yes      | -       | ID of the secondary/fallback sensor source                             |
+| `internal`            | bool   | No       | `true`  | If `true`, hides the value sensor from HA (tier sensor always visible) |
+| `accuracy_decimals`   | int    | No       | `1`     | Decimal precision for displayed value                                  |
+| `update_interval`     | string | No       | `10s`   | How often to evaluate failover logic                                   |
 
 **Exposed entities:**
 - `sensor.{sensor_id}` - The abstracted sensor value from the active tier

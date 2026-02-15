@@ -105,6 +105,8 @@ See [docs/principles.md](docs/principles.md) for the complete set of foundationa
 
 - [Getting Started](docs/getting-started.md) - Installation and first steps
 - [Principles](docs/principles.md) - Foundational design principles
+- [Two-Zone Radiant + Fancoil](examples/two_zone_radiant_fancoil.yaml) - Boost coordination for hybrid zones
+- [MEV Two-Demand Ventilation](examples/mev_two_demand.yaml) - Proportional ventilation driven by humidity + CO2
 - [Contributing](CONTRIBUTING.md) - How to contribute components and improvements
 
 ---

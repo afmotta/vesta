@@ -1,0 +1,302 @@
+# =============================================================================
+# Example: MEV Ventilation with Two-Point Demand (Humidity + CO2)
+#
+# This example demonstrates a mechanical extract ventilation (MEV) system
+# controlled by two proportional demand signals: humidity and CO2.
+# The higher demand wins (MAX aggregation), driving fan speed proportionally.
+#
+# On top of demand-based fan speed, the humidity cascade state machine
+# automatically escalates through Fan Only -> Dehumidifying -> Integration
+# when sustained high humidity is detected.
+#
+# Vesta components used:
+#   - Proportional Demand Sensor (x2: humidity, CO2)
+#   - Trend Sensor (auto-included by each demand sensor)
+#   - MEV Ventilation Coordinator (humidity cascade state machine)
+#
+# Hardware assumed:
+#   - ESP32 board with 0-10V DAC output for fan speed
+#   - MEV unit with on/off, dehumidifier, and cooling control inputs
+#   - Humidity and CO2 sensors (via HA, Modbus, UDP, or GPIO)
+#   - A "summer_mode" binary sensor indicating cooling season
+#
+# This is a REFERENCE EXAMPLE - adapt hardware definitions, sensor IDs,
+# and control interfaces to match your actual installation.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Board configuration (replace with your actual board)
+# ---------------------------------------------------------------------------
+esphome:
+  name: mev-controller
+  friendly_name: "MEV Controller"
+
+esp32:
+  board: esp32dev
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+  level: INFO
+
+# ---------------------------------------------------------------------------
+# Sensor sources (replace with your actual sensors)
+# ---------------------------------------------------------------------------
+sensor:
+  # Humidity sensor - could be a single bathroom sensor, or a MAX aggregation
+  # of multiple rooms. The demand sensor converts this to a 0-100% signal.
+  - platform: homeassistant
+    id: bathroom_humidity
+    entity_id: sensor.bathroom_humidity
+    internal: true
+
+  # CO2 sensor - could be a single sensor or MAX of multiple rooms
+  - platform: homeassistant
+    id: living_room_co2
+    entity_id: sensor.living_room_co2
+    internal: true
+
+# ---------------------------------------------------------------------------
+# Season mode sensor
+# ---------------------------------------------------------------------------
+binary_sensor:
+  - platform: homeassistant
+    id: summer_mode
+    entity_id: binary_sensor.cooling_season
+    internal: true
+
+  # Alarm sensor (replace with your actual alarm input - GPIO, Modbus, etc.)
+  - platform: homeassistant
+    id: mev_alarm
+    entity_id: binary_sensor.mev_alarm
+    internal: true
+
+# ---------------------------------------------------------------------------
+# Hardware outputs
+# ---------------------------------------------------------------------------
+output:
+  # 0-10V DAC for fan speed control
+  # Replace with your actual DAC output (e.g., MCP4725, PCF8591, or board DAC)
+  - platform: ledc
+    id: fan_speed_dac
+    pin: GPIO25
+
+# ---------------------------------------------------------------------------
+# Hardware control switches
+# ---------------------------------------------------------------------------
+# Replace these with your actual MEV control interface:
+# GPIO relays, Modbus writes, or other control method.
+switch:
+  - platform: gpio
+    id: mev_dehumidifier
+    pin: GPIO26
+    name: "MEV Dehumidifier"
+    icon: mdi:water-percent
+
+  - platform: gpio
+    id: mev_integration
+    pin: GPIO27
+    name: "MEV Integration"
+    icon: mdi:snowflake
+
+# ---------------------------------------------------------------------------
+# Fan speed number entity (0-100%) -> DAC output
+# ---------------------------------------------------------------------------
+number:
+  - platform: template
+    name: "MEV Fan Speed"
+    id: mev_fan_speed
+    icon: mdi:fan
+    min_value: 0
+    max_value: 100
+    step: 1
+    mode: slider
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    set_action:
+      - output.set_level:
+          id: fan_speed_dac
+          level: !lambda "return x / 100.0;"
+
+# =============================================================================
+# VESTA PACKAGES
+# =============================================================================
+
+packages:
+  # =========================================================================
+  # Demand Sensor 1: Humidity
+  # =========================================================================
+  # Converts humidity reading (e.g., 40-80% RH) into a 0-100% demand signal.
+  # Rate boost (multiplier: 5.0) increases demand when humidity is rising fast
+  # (e.g., someone starts a shower).
+  #
+  # Creates:
+  #   sensor.mev_humidity_demand  - Humidity demand percentage
+  #   sensor.mev_humidity_rate    - Humidity rate of change (%/min)
+  #   sensor.mev_humidity_lower   - Lower bound (from HA, used by controller)
+  #   sensor.mev_humidity_upper   - Upper bound (from HA)
+  humidity_demand: !include
+    file: packages/utils/proportional_demand_sensor.yaml
+    vars:
+      component_id: "mev"
+      component_name: "MEV"
+      demand_slug: "humidity"
+      demand_name: "Humidity"
+      source_sensor_id: bathroom_humidity
+      min_output_id: mev_min_fan_speed
+      lower_bound_entity: "input_number.mev_humidity_lower_bound"
+      upper_bound_entity: "input_number.mev_humidity_upper_bound"
+      rate_multiplier: "5.0"
+      icon: "mdi:water-percent"
+
+  # =========================================================================
+  # Demand Sensor 2: CO2
+  # =========================================================================
+  # Converts CO2 reading (e.g., 400-1200 ppm) into a 0-100% demand signal.
+  # Rate boost (multiplier: 0.05) gives a small bump when CO2 is rising.
+  #
+  # Creates:
+  #   sensor.mev_co2_demand  - CO2 demand percentage
+  #   sensor.mev_co2_rate    - CO2 rate of change (ppm/min)
+  co2_demand: !include
+    file: packages/utils/proportional_demand_sensor.yaml
+    vars:
+      component_id: "mev"
+      component_name: "MEV"
+      demand_slug: "co2"
+      demand_name: "CO2"
+      unit_of_measurement: "ppm"
+      source_sensor_id: living_room_co2
+      min_output_id: mev_min_fan_speed
+      lower_bound_entity: "input_number.mev_co2_lower_bound"
+      upper_bound_entity: "input_number.mev_co2_upper_bound"
+      rate_multiplier: "0.05"
+      icon: "mdi:molecule-co2"
+
+  # =========================================================================
+  # MEV Ventilation Controller
+  # =========================================================================
+  # Reads the aggregated demand signal, applies minimum fan speed floor,
+  # and manages the humidity cascade state machine:
+  #   Fan Only -> Dehumidifying -> Integration (summer only)
+  #
+  # Creates:
+  #   sensor.mev_final_fan_speed      - Calculated fan speed (0-100%)
+  #   text_sensor.mev_automation_state - Current state machine status
+  #   select.mev_humidity_state        - Humidity cascade state
+  controller: !include
+    file: packages/coordinators/mev_ventilation.yaml
+    vars:
+      component_id: "mev"
+      component_name: "MEV"
+      demand_sensor: mev_max_demand
+      humidity_sensor: bathroom_humidity
+      humidity_rate_sensor: mev_humidity_rate
+      humidity_lower_sensor: mev_humidity_lower
+      cooling_mode_sensor: summer_mode
+      dehumidifier_switch: mev_dehumidifier
+      integration_switch: mev_integration
+      alarm_sensor: mev_alarm
+      fan_speed_number: mev_fan_speed
+      min_fan_speed_entity: "input_number.mev_min_fan_speed"
+      escalation_threshold_entity: "input_number.mev_escalation_threshold"
+      deescalation_threshold_entity: "input_number.mev_deescalation_threshold"
+      escalation_delay_entity: "input_number.mev_escalation_delay"
+      deescalation_delay_entity: "input_number.mev_deescalation_delay"
+
+# =============================================================================
+# MAX Demand Aggregation
+# =============================================================================
+# Takes the higher of humidity and CO2 demands. The winning demand drives
+# fan speed. A diagnostic text sensor shows which demand is dominant.
+sensor:
+  - platform: template
+    name: "MEV Max Demand"
+    id: mev_max_demand
+    unit_of_measurement: "%"
+    icon: mdi:speedometer
+    accuracy_decimals: 0
+    update_interval: 60s
+    lambda: |-
+      float humidity = id(mev_humidity_demand).state;
+      float co2 = id(mev_co2_demand).state;
+      float min_fan = id(mev_min_fan_speed).state;
+
+      if (isnan(min_fan)) min_fan = 20.0f;
+      float f_hum = isnan(humidity) ? min_fan : humidity;
+      float f_co2 = isnan(co2) ? min_fan : co2;
+
+      float max_demand = std::max(f_hum, f_co2);
+
+      // Track which demand is driving fan speed
+      std::string dominant = "Ventilation";
+      if (max_demand > min_fan) {
+        if (max_demand == f_hum) dominant = "Humidity";
+        else if (max_demand == f_co2) dominant = "CO2";
+      }
+      id(mev_dominant_demand).publish_state(dominant);
+
+      return std::min(100.0f, max_demand);
+
+text_sensor:
+  - platform: template
+    name: "MEV Dominant Demand"
+    id: mev_dominant_demand
+    icon: mdi:gauge
+    entity_category: diagnostic
+
+# =============================================================================
+# What you get from this configuration:
+# =============================================================================
+#
+# Fan speed control:
+#   - Proportional fan speed based on the higher of humidity or CO2 demand
+#   - Minimum fan speed floor (configurable via HA helper)
+#   - Alarm safety cutoff (fan speed -> 0% on alarm)
+#
+# Humidity cascade state machine:
+#   - Fan Only: Normal ventilation, fan speed driven by demand
+#   - Dehumidifying: Dehumidifier activated when fan speed stays high
+#     and humidity is still rising (sustained for configurable delay)
+#   - Integration: Dehumidifier + cooling activated in summer when
+#     dehumidifying alone isn't enough (sustained for configurable delay)
+#   - Automatic de-escalation when humidity drops below lower bound
+#
+# Diagnostic entities exposed to HA:
+#   - mev_humidity_demand (sensor: humidity demand %)
+#   - mev_co2_demand (sensor: CO2 demand %)
+#   - mev_humidity_rate (sensor: humidity rate of change %/min)
+#   - mev_co2_rate (sensor: CO2 rate of change ppm/min)
+#   - mev_max_demand (sensor: MAX of all demands)
+#   - mev_dominant_demand (text: "Humidity", "CO2", or "Ventilation")
+#   - mev_final_fan_speed (sensor: actual fan speed after min floor)
+#   - mev_automation_state (text: state machine status)
+#   - mev_humidity_state (select: Fan Only / Dehumidifying / Integration)
+#
+# HA Helpers to create (Settings > Devices > Helpers > Number):
+#   Demand bounds:
+#   - input_number.mev_humidity_lower_bound (0-100%, default: 50)
+#   - input_number.mev_humidity_upper_bound (0-100%, default: 80)
+#   - input_number.mev_co2_lower_bound (0-2000 ppm, default: 600)
+#   - input_number.mev_co2_upper_bound (0-2000 ppm, default: 1200)
+#   Fan speed:
+#   - input_number.mev_min_fan_speed (0-100%, default: 20)
+#   Cascade state machine:
+#   - input_number.mev_escalation_threshold (0-100%, default: 70)
+#   - input_number.mev_deescalation_threshold (0-100%, default: 40)
+#   - input_number.mev_escalation_delay (1-60 min, default: 10)
+#   - input_number.mev_deescalation_delay (1-60 min, default: 15)
+#   Season:
+#   - binary_sensor.cooling_season (or equivalent)

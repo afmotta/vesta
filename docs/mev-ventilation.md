@@ -1,47 +1,43 @@
-# MEV Ventilation Coordinator
+# MEV Ventilation Controller
 
-Multi-demand mechanical extract ventilation with humidity cascade state machine and automatic mode escalation.
+Humidity cascade state machine controller for mechanical extract ventilation systems with event-driven escalation/de-escalation.
 
 ## What It Does
 
-The MEV coordinator drives a mechanical extract ventilation unit based on three air quality demands (CO2, IAQ, humidity). It calculates each demand as a percentage, takes the highest (MAX aggregation), and outputs that as the fan speed. A separate humidity cascade state machine automatically escalates through Fan Only, Dehumidifying, and Cooling modes based on sustained humidity conditions.
+The MEV ventilation controller manages the humidity cascade state machine for a mechanical extract ventilation unit. It reads a single aggregated demand signal, applies a minimum fan speed floor, and automatically escalates through Fan Only, Dehumidifying, and Integration modes based on sustained humidity conditions.
+
+**This is a pure controller** - it does not create hardware entities (switches, relays, DAC) or demand sensors. Those are provided externally, making it reusable across different hardware platforms and demand configurations.
 
 ## How It Works
 
-### Multi-Demand Orchestration
+### Fan Speed Calculation
 
-Three independent proportional demand sensors each convert their input into a 0-100% demand signal:
+The controller reads a single aggregated demand sensor and applies a minimum floor:
 
 ```
-CO2 Sensor ──▶ CO2 Demand (0-100%)    ──┐
-                                          │
-IAQ Sensor ──▶ IAQ Demand (0-100%)    ──┼──▶ MAX ──▶ Final Fan Speed
-                                          │
-Humidity   ──▶ Humidity Demand (0-100%)──┘
+Demand Sensor (0-100%) ──▶ max(demand, min_fan_speed) ──▶ Final Fan Speed
+                                                              │
+Alarm Sensor ──▶ if alarm → 0% ────────────────────────────┘
 ```
 
-**MAX aggregation**: The highest demand wins. If CO2 demands 40%, IAQ demands 25%, and humidity demands 70%, the fan runs at 70%. This ensures the worst air quality dimension always gets addressed.
-
-Each demand sensor uses configurable lower/upper bounds (set via Home Assistant `input_number` entities) and optional rate-of-change boost for proactive response.
-
-A **dominant demand** diagnostic sensor reports which demand is currently driving the fan speed.
+The demand sensor is created externally - it could be a single proportional demand, a MAX aggregation of multiple demands, or any other 0-100% signal. The controller doesn't care how the demand was calculated.
 
 ### Humidity Cascade State Machine
 
-Independent of fan speed, the coordinator manages a 3-state machine for humidity control hardware:
+The controller manages a 3-state machine for humidity control hardware:
 
 ```
-┌──────────┐    escalate     ┌───────────────┐    escalate     ┌─────────┐
-│ Fan Only │ ──────────────▶ │ Dehumidifying  │ ──────────────▶ │ Cooling │
-│          │ ◀────────────── │               │ ◀────────────── │         │
-└──────────┘   de-escalate   └───────────────┘   de-escalate   └─────────┘
+┌──────────┐    escalate     ┌───────────────┐    escalate     ┌─────────────┐
+│ Fan Only │ ──────────────▶ │ Dehumidifying  │ ──────────────▶ │ Integration │
+│          │ ◀────────────── │               │ ◀────────────── │             │
+└──────────┘   de-escalate   └───────────────┘   de-escalate   └─────────────┘
 ```
 
-| State | Hardware | Description |
-|-------|----------|-------------|
-| **Fan Only** | Fan running, dehumidifier OFF, cooling OFF | Normal ventilation |
-| **Dehumidifying** | Fan running, dehumidifier ON, cooling OFF | Active moisture removal |
-| **Cooling** | Fan running, dehumidifier ON, cooling ON | Maximum humidity reduction (summer only) |
+| State | Action | Description |
+|-------|--------|-------------|
+| **Fan Only** | Dehumidifier OFF, cooling OFF | Normal ventilation |
+| **Dehumidifying** | Dehumidifier ON, cooling OFF | Active moisture removal |
+| **Integration** | Dehumidifier ON, cooling ON | Maximum humidity reduction (summer only) |
 
 ### Escalation Rules
 
@@ -49,9 +45,9 @@ Escalation occurs when **both** conditions are sustained for the configured dela
 1. Final fan speed >= escalation threshold
 2. Humidity rate of change > 0 (humidity is rising)
 
-**Fan Only → Dehumidifying**: Always available when conditions are met.
+**Fan Only -> Dehumidifying**: Always available when conditions are met.
 
-**Dehumidifying → Cooling**: Only available during cooling season (`cooling_mode_sensor` is true). This prevents energy-wasting cooling in winter.
+**Dehumidifying -> Integration**: Only available during cooling season (`cooling_mode_sensor` is true). This prevents energy-wasting cooling in winter.
 
 ### De-escalation Rules
 
@@ -59,9 +55,9 @@ De-escalation occurs when **both** conditions are sustained for the configured d
 1. Humidity < lower bound (below the demand range)
 2. Final fan speed < de-escalation threshold
 
-**Cooling → Dehumidifying**: Also triggers immediately when cooling season ends.
+**Integration -> Dehumidifying**: Also triggers immediately when cooling season ends.
 
-**Dehumidifying → Fan Only**: Only when not simultaneously escalating (prevents flapping).
+**Dehumidifying -> Fan Only**: Only when not simultaneously escalating (prevents flapping).
 
 ### Timing (Event-Driven Architecture)
 
@@ -81,19 +77,7 @@ Escalation and de-escalation delays are configurable via HA `input_number` entit
 
 ### Alarm Safety
 
-If the alarm input activates, the fan speed is immediately set to 0% and an ERROR-level log is emitted. Normal operation resumes when the alarm clears.
-
-## Dependencies
-
-This component includes 3 proportional demand sensors, each of which includes a trend sensor:
-
-```
-mev_ventilation.yaml (packages/coordinators/)
-├── proportional_demand_sensor.yaml × 3 (packages/utils/)
-│   └── trend_sensor.yaml × 3 (packages/utils/)
-```
-
-All dependencies are auto-included. You only need to include `mev_ventilation.yaml`.
+If the alarm sensor activates, the fan speed is immediately set to 0%. Normal operation resumes when the alarm clears.
 
 ## Parameter Reference
 
@@ -106,25 +90,24 @@ All dependencies are auto-included. You only need to include `mev_ventilation.ya
 | `component_id` | string | Prefix for entity IDs (e.g., `mev`) |
 | `component_name` | string | Friendly name prefix (e.g., `MEV`) |
 
-**Hardware:**
+**External Sensors (read):**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `power_relay` | ID | Relay for main power |
-| `mode_relay` | ID | Relay for winter/summer mode |
-| `dehumidifier_relay` | ID | Relay for dehumidifier |
-| `cooling_relay` | ID | Relay for cooling integration |
-| `fan_speed_output` | ID | DAC output for 0-10V fan speed |
-| `alarm_input` | ID | Binary sensor for alarm monitoring |
+| `demand_sensor` | sensor ID | Aggregated demand signal (0-100%) |
+| `humidity_sensor` | sensor ID | Humidity reading (for de-escalation condition) |
+| `humidity_rate_sensor` | sensor ID | Humidity rate of change (for escalation condition) |
+| `humidity_lower_sensor` | sensor ID | Humidity lower bound (for de-escalation condition) |
+| `cooling_mode_sensor` | binary_sensor ID | True = cooling season |
+| `alarm_sensor` | binary_sensor ID | Alarm monitoring |
 
-**Sensor Sources:**
+**External Actuators (write):**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `humidity_sensor` | ID | Humidity sensor to monitor |
-| `co2_sensor` | ID | CO2 sensor to monitor |
-| `iaq_sensor` | ID | IAQ (air quality index) sensor to monitor |
-| `cooling_mode_sensor` | ID | Binary sensor: true = cooling season |
+| `dehumidifier_switch` | switch ID | Controls dehumidifier hardware |
+| `integration_switch` | switch ID | Controls integration (cooling) hardware |
+| `fan_speed_number` | number ID | Fan speed output (0-100%) |
 
 **Configuration Entities (Home Assistant):**
 
@@ -136,77 +119,91 @@ All dependencies are auto-included. You only need to include `mev_ventilation.ya
 | `escalation_delay_entity` | HA entity | Minutes before escalation triggers |
 | `deescalation_delay_entity` | HA entity | Minutes before de-escalation triggers |
 
-**Demand Sensor Bounds (Home Assistant):**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `co2_lower_bound_entity` | HA entity | CO2 lower bound for demand calculation |
-| `co2_upper_bound_entity` | HA entity | CO2 upper bound for demand calculation |
-| `iaq_lower_bound_entity` | HA entity | IAQ lower bound for demand calculation |
-| `iaq_upper_bound_entity` | HA entity | IAQ upper bound for demand calculation |
-| `humidity_lower_bound_entity` | HA entity | Humidity lower bound for demand calculation |
-| `humidity_upper_bound_entity` | HA entity | Humidity upper bound for demand calculation |
-
-### Optional Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `co2_rate_multiplier` | float | `0.05` | Rate boost multiplier for CO2 demand |
-| `iaq_rate_multiplier` | float | `2.0` | Rate boost multiplier for IAQ demand |
-| `humidity_rate_multiplier` | float | `20.0` | Rate boost multiplier for humidity demand |
-
 ## Exposed Entities
 
 | Entity | Type | Description |
 |--------|------|-------------|
 | `{component_id}_final_fan_speed` | sensor | Calculated fan speed (0-100%) |
-| `{component_id}_co2_demand` | sensor | CO2 demand percentage |
-| `{component_id}_iaq_demand` | sensor | IAQ demand percentage |
-| `{component_id}_humidity_demand` | sensor | Humidity demand percentage |
-| `{component_id}_dominant_demand` | text_sensor | Which demand drives fan speed |
 | `{component_id}_automation_state` | text_sensor | Current state machine status |
-| `{component_id}_humidity_state` | select | Humidity cascade state (Fan Only/Dehumidifying/Cooling) |
-| `{component_id}_fan_speed` | number | Fan speed control slider (0-100%) |
-| `{component_id}_power` | switch | Main power |
-| `{component_id}_mode` | switch | Winter/Summer mode |
-| `{component_id}_dehumidifier` | switch | Dehumidifier |
-| `{component_id}_cooling` | switch | Cooling integration |
-| `{component_id}_alarm` | binary_sensor | Alarm status |
+| `{component_id}_humidity_state` | select | Humidity cascade state (Fan Only/Dehumidifying/Integration) |
 
 ## Usage Example
 
+### Step 1: Create demand sensors externally
+
+Use the [proportional demand sensor](proportional-demand.md) utility to create individual demand sensors, then aggregate with a MAX template:
+
 ```yaml
 packages:
-  mev: !include
+  co2_demand: !include
+    file: packages/utils/proportional_demand_sensor.yaml
+    vars:
+      component_id: "mev"
+      component_name: "MEV"
+      demand_slug: "co2"
+      demand_name: "CO2"
+      source_sensor_id: living_room_co2
+      min_output_id: mev_min_fan_speed
+      lower_bound_entity: "input_number.co2_lower_bound"
+      upper_bound_entity: "input_number.co2_upper_bound"
+      rate_multiplier: "0.05"
+
+  humidity_demand: !include
+    file: packages/utils/proportional_demand_sensor.yaml
+    vars:
+      component_id: "mev"
+      component_name: "MEV"
+      demand_slug: "humidity"
+      demand_name: "Humidity"
+      source_sensor_id: bathroom_humidity
+      min_output_id: mev_min_fan_speed
+      lower_bound_entity: "input_number.humidity_lower_bound"
+      upper_bound_entity: "input_number.humidity_upper_bound"
+      rate_multiplier: "20.0"
+
+sensor:
+  - platform: template
+    name: "MEV Max Demand"
+    id: mev_max_demand
+    unit_of_measurement: "%"
+    lambda: |-
+      float co2 = id(mev_co2_demand).state;
+      float hum = id(mev_humidity_demand).state;
+      if (isnan(co2)) co2 = 0;
+      if (isnan(hum)) hum = 0;
+      return std::max(co2, hum);
+```
+
+### Step 2: Create hardware entities externally
+
+Define switches, alarm sensor, and fan speed number in your device or board config.
+
+### Step 3: Include the controller
+
+```yaml
+packages:
+  mev_ctrl: !include
     file: packages/coordinators/mev_ventilation.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"
-      # Hardware
-      power_relay: relay_1
-      mode_relay: relay_2
-      dehumidifier_relay: relay_3
-      cooling_relay: relay_4
-      fan_speed_output: dac_1
-      alarm_input: input_1
-      # Sensor sources
+      # External sensors
+      demand_sensor: mev_max_demand
       humidity_sensor: bathroom_humidity
-      co2_sensor: living_room_co2
-      iaq_sensor: living_room_iaq
+      humidity_rate_sensor: mev_humidity_rate
       cooling_mode_sensor: summer_mode
-      # HA configuration entities
+      # External actuators
+      dehumidifier_switch: mev_dehumidifier
+      integration_switch: mev_integration
+      alarm_sensor: mev_alarm
+      fan_speed_number: mev_fan_speed
+      # HA configuration
       min_fan_speed_entity: "input_number.mev_min_fan_speed"
       escalation_threshold_entity: "input_number.mev_escalation_threshold"
       deescalation_threshold_entity: "input_number.mev_deescalation_threshold"
       escalation_delay_entity: "input_number.mev_escalation_delay"
       deescalation_delay_entity: "input_number.mev_deescalation_delay"
-      # Demand sensor bounds
-      co2_lower_bound_entity: "input_number.co2_lower_bound"
-      co2_upper_bound_entity: "input_number.co2_upper_bound"
-      iaq_lower_bound_entity: "input_number.iaq_lower_bound"
-      iaq_upper_bound_entity: "input_number.iaq_upper_bound"
-      humidity_lower_bound_entity: "input_number.humidity_lower_bound"
-      humidity_upper_bound_entity: "input_number.humidity_upper_bound"
+      humidity_lower_sensor: mev_humidity_lower
 ```
 
 ### Required Home Assistant Helpers
@@ -220,15 +217,11 @@ Create these `input_number` helpers in Home Assistant (Settings > Devices > Help
 | De-escalation threshold | 0-100 | 40 | Fan speed below which de-escalation starts |
 | Escalation delay | 1-60 | 10 | Minutes before escalating |
 | De-escalation delay | 1-60 | 15 | Minutes before de-escalating |
-| CO2 lower/upper bound | 400-2000 | 600/1000 | PPM range for demand calculation |
-| IAQ lower/upper bound | 0-500 | 50/150 | IAQ index range for demand calculation |
-| Humidity lower/upper bound | 0-100 | 50/70 | % RH range for demand calculation |
 
 ## Integration Tips
 
-- **Sensor aggregation**: If monitoring multiple rooms, create a `max` template sensor that takes the worst reading across all rooms, then feed that as the CO2/IAQ/humidity source
-- **Hardware abstraction**: The relay switches wrap raw relay entities (e.g., PCF8574 GPIO expanders) with proper state tracking and friendly names
-- **Fan speed mapping**: The 0-100% fan speed maps linearly to 0-10V via the DAC output. Adjust your MEV unit's configuration if it uses a different voltage range
-- **Alarm handling**: The alarm input is typically a normally-closed contact. When the circuit opens (alarm), fan speed drops to 0% immediately
-- **Tuning**: Start with conservative values (high escalation threshold, long delays). Monitor the `automation_state` and `dominant_demand` diagnostic sensors to understand system behavior before tightening thresholds
-- **Season transitions**: When `cooling_mode_sensor` goes false, any active Cooling state automatically de-escalates to Dehumidifying on the next evaluation cycle
+- **Flexible demands**: Use any number of demand sensors. Aggregate them with a MAX template sensor and pass the result as `demand_sensor`. You can use 1 demand (humidity only) or 10 (one per room) - the controller doesn't care.
+- **Hardware freedom**: The controller works with any switch/number entities. Use relay wrappers, Modbus outputs, GPIO, or virtual entities - as long as they implement the ESPHome switch/number interface.
+- **Sensor aggregation**: If monitoring multiple rooms, create a `max` template sensor that takes the worst reading across all rooms, then feed that as the humidity/demand source.
+- **Tuning**: Start with conservative values (high escalation threshold, long delays). Monitor the `automation_state` diagnostic sensor to understand system behavior before tightening thresholds.
+- **Season transitions**: When `cooling_mode_sensor` goes false, any active Integration state automatically de-escalates to Dehumidifying on the next evaluation cycle.

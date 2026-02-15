@@ -1,0 +1,386 @@
+# =============================================================================
+# Example: Two-Zone Radiant + Fancoil with Boost Coordination
+#
+# This example demonstrates a complete two-zone climate control setup using
+# Vesta components. Each zone has:
+#   - Failover sensors (HA primary, local secondary)
+#   - Radiant floor PID controller (base layer)
+#   - Fancoil PID controller (boost layer)
+#   - Fancoil Boost Coordinator (automatic activation/deactivation)
+#   - Temperature trend analysis (via trend sensor, auto-included by boost)
+#
+# Hardware assumed:
+#   - ESP32 board with enough GPIO for relays/outputs
+#   - 2 radiant floor zone valves (relay or slow PWM)
+#   - 2 fancoil units (controlled via relay or analog output)
+#   - Temperature and humidity sensors per zone (via HA or local)
+#   - A "summer_mode" binary sensor indicating cooling season
+#
+# This is a REFERENCE EXAMPLE - adapt hardware definitions, sensor IDs,
+# and GPIO pins to match your actual installation.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Board and network configuration (replace with your actual board)
+# ---------------------------------------------------------------------------
+esphome:
+  name: climate-controller
+  friendly_name: "Climate Controller"
+
+esp32:
+  board: esp32dev
+
+# Replace with your actual network config
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+  level: INFO
+
+# ---------------------------------------------------------------------------
+# Sensor sources (replace with your actual sensor setup)
+# ---------------------------------------------------------------------------
+# These represent the raw sensor inputs that feed into failover sensors.
+# In a real setup, these would come from HA, Modbus, UDP, or GPIO.
+
+sensor:
+  # Zone 1: Living Room - HA sensors (primary)
+  - platform: homeassistant
+    id: ha_living_room_temp
+    entity_id: sensor.living_room_temperature
+    internal: true
+
+  - platform: homeassistant
+    id: ha_living_room_humidity
+    entity_id: sensor.living_room_humidity
+    internal: true
+
+  # Zone 1: Living Room - Local sensors (secondary/fallback)
+  # In a real setup, these might come from Modbus or UDP packet_transport
+  - platform: homeassistant
+    id: local_living_room_temp
+    entity_id: sensor.living_room_temp_local
+    internal: true
+
+  - platform: homeassistant
+    id: local_living_room_humidity
+    entity_id: sensor.living_room_humidity_local
+    internal: true
+
+  # Zone 2: Kitchen - HA sensors (primary)
+  - platform: homeassistant
+    id: ha_kitchen_temp
+    entity_id: sensor.kitchen_temperature
+    internal: true
+
+  - platform: homeassistant
+    id: ha_kitchen_humidity
+    entity_id: sensor.kitchen_humidity
+    internal: true
+
+  # Zone 2: Kitchen - Local sensors (secondary/fallback)
+  - platform: homeassistant
+    id: local_kitchen_temp
+    entity_id: sensor.kitchen_temp_local
+    internal: true
+
+  - platform: homeassistant
+    id: local_kitchen_humidity
+    entity_id: sensor.kitchen_humidity_local
+    internal: true
+
+  # ---------------------------------------------------------------------------
+  # Shared threshold sensors (imported from HA input_number helpers)
+  # Create these in HA: Settings > Devices > Helpers > Number
+  # ---------------------------------------------------------------------------
+
+  # Fancoil boost activates when temp delta exceeds this threshold (°C)
+  - platform: homeassistant
+    id: fancoil_boost_threshold
+    entity_id: input_number.fancoil_boost_threshold
+    internal: true
+
+  # Fancoil boost activates when humidity exceeds this threshold (%RH)
+  - platform: homeassistant
+    id: fancoil_humidity_threshold
+    entity_id: input_number.fancoil_humidity_threshold
+    internal: true
+
+  # Predictive boost triggers after this many minutes of PID saturation
+  - platform: homeassistant
+    id: predictive_boost_minutes
+    entity_id: input_number.predictive_boost_minutes
+    internal: true
+
+# ---------------------------------------------------------------------------
+# Season mode sensor
+# ---------------------------------------------------------------------------
+# In a real system, this comes from a Modbus register, HA automation, or
+# manual switch. True = cooling season, false = heating season.
+binary_sensor:
+  - platform: homeassistant
+    id: summer_mode
+    entity_id: binary_sensor.cooling_season
+    internal: true
+
+# ---------------------------------------------------------------------------
+# Hardware outputs (replace with your actual GPIO/relay configuration)
+# ---------------------------------------------------------------------------
+output:
+  # Zone 1: Living Room radiant floor valve (slow PWM for proportional control)
+  - platform: slow_pwm
+    id: slow_pwm_living_room
+    pin: GPIO25
+    period: 300s
+
+  # Zone 2: Kitchen radiant floor valve
+  - platform: slow_pwm
+    id: slow_pwm_kitchen
+    pin: GPIO26
+    period: 300s
+
+# ---------------------------------------------------------------------------
+# PID Controllers
+# ---------------------------------------------------------------------------
+# Each zone has two PID controllers: one for radiant (base), one for fancoil (boost).
+# The boost coordinator manages switching between them.
+
+climate:
+  # Zone 1: Living Room - Radiant PID
+  - platform: pid
+    id: pid_radiant_living_room
+    name: "Living Room Radiant"
+    sensor: living_room_temp           # From failover sensor (defined below)
+    default_target_temperature: 22
+    cool_output: slow_pwm_living_room
+    control_parameters:
+      kp: 0.8
+      ki: 0.005
+      kd: 0.05
+
+  # Zone 1: Living Room - Fancoil PID (controlled by boost coordinator)
+  - platform: pid
+    id: pid_fancoil_living_room
+    name: "Living Room Fancoil"
+    sensor: living_room_temp
+    default_target_temperature: 22
+    cool_output: slow_pwm_living_room  # Replace with your fancoil output
+    control_parameters:
+      kp: 1.2
+      ki: 0.008
+      kd: 0.08
+
+  # Zone 2: Kitchen - Radiant PID
+  - platform: pid
+    id: pid_radiant_kitchen
+    name: "Kitchen Radiant"
+    sensor: kitchen_temp
+    default_target_temperature: 22
+    cool_output: slow_pwm_kitchen
+    control_parameters:
+      kp: 0.8
+      ki: 0.005
+      kd: 0.05
+
+  # Zone 2: Kitchen - Fancoil PID
+  - platform: pid
+    id: pid_fancoil_kitchen
+    name: "Kitchen Fancoil"
+    sensor: kitchen_temp
+    default_target_temperature: 22
+    cool_output: slow_pwm_kitchen      # Replace with your fancoil output
+    control_parameters:
+      kp: 1.2
+      ki: 0.008
+      kd: 0.08
+
+# ---------------------------------------------------------------------------
+# PID output sensors (required by boost coordinator)
+# ---------------------------------------------------------------------------
+# These template sensors expose the PID cool output (0-1 range) so the
+# boost coordinator can detect saturation.
+sensor:
+  - platform: pid
+    climate_id: pid_radiant_living_room
+    id: pid_radiant_living_room_cool
+    type: COOL
+    internal: true
+
+  - platform: pid
+    climate_id: pid_radiant_kitchen
+    id: pid_radiant_kitchen_cool
+    type: COOL
+    internal: true
+
+# ---------------------------------------------------------------------------
+# Radiant override entities (required by boost coordinator)
+# ---------------------------------------------------------------------------
+# The boost coordinator uses these to lock radiant output at 100% during boost.
+number:
+  - platform: template
+    id: living_room_radiant_override_value
+    name: "Living Room Radiant Override %"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    internal: true
+
+  - platform: template
+    id: kitchen_radiant_override_value
+    name: "Kitchen Radiant Override %"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    internal: true
+
+switch:
+  - platform: template
+    id: living_room_radiant_override
+    name: "Living Room Radiant Override"
+    optimistic: true
+    internal: true
+
+  - platform: template
+    id: kitchen_radiant_override
+    name: "Kitchen Radiant Override"
+    optimistic: true
+    internal: true
+
+# =============================================================================
+# VESTA PACKAGES
+# =============================================================================
+# Below is where Vesta components are included. Each package is parameterized
+# with zone-specific variables.
+
+packages:
+  # =========================================================================
+  # Zone 1: Living Room
+  # =========================================================================
+
+  # Failover sensors: HA (primary) → local (secondary) → Emergency (NAN)
+  living_room_temp_failover: !include
+    file: packages/utils/failover_sensor.yaml
+    vars:
+      sensor_id: "living_room_temp"
+      sensor_name: "Living Room Temperature"
+      unit_of_measurement: "°C"
+      device_class: "temperature"
+      primary_sensor: ha_living_room_temp
+      secondary_sensor: local_living_room_temp
+
+  living_room_humidity_failover: !include
+    file: packages/utils/failover_sensor.yaml
+    vars:
+      sensor_id: "living_room_humidity"
+      sensor_name: "Living Room Humidity"
+      unit_of_measurement: "%"
+      device_class: "humidity"
+      primary_sensor: ha_living_room_humidity
+      secondary_sensor: local_living_room_humidity
+
+  # Fancoil Boost Coordinator (includes trend sensor automatically)
+  # Monitors radiant PID output + temperature + humidity to decide
+  # when fancoil boost is needed.
+  living_room_boost: !include
+    file: packages/coordinators/fancoil_boost.yaml
+    vars:
+      zone_slug: "living_room"
+      zone_name: "Living Room"
+      temperature_sensor: living_room_temp
+      humidity_sensor: living_room_humidity
+      radiant_pid_id: pid_radiant_living_room
+      radiant_pid_cool_sensor: pid_radiant_living_room_cool
+      fancoil_pid_id: pid_fancoil_living_room
+      radiant_override_value_id: living_room_radiant_override_value
+      radiant_override_switch_id: living_room_radiant_override
+      radiant_pwm_id: slow_pwm_living_room
+      cooling_mode_sensor: summer_mode
+      temp_threshold_sensor: fancoil_boost_threshold
+      humidity_threshold_sensor: fancoil_humidity_threshold
+      predictive_minutes_sensor: predictive_boost_minutes
+
+  # =========================================================================
+  # Zone 2: Kitchen
+  # =========================================================================
+
+  kitchen_temp_failover: !include
+    file: packages/utils/failover_sensor.yaml
+    vars:
+      sensor_id: "kitchen_temp"
+      sensor_name: "Kitchen Temperature"
+      unit_of_measurement: "°C"
+      device_class: "temperature"
+      primary_sensor: ha_kitchen_temp
+      secondary_sensor: local_kitchen_temp
+
+  kitchen_humidity_failover: !include
+    file: packages/utils/failover_sensor.yaml
+    vars:
+      sensor_id: "kitchen_humidity"
+      sensor_name: "Kitchen Humidity"
+      unit_of_measurement: "%"
+      device_class: "humidity"
+      primary_sensor: ha_kitchen_humidity
+      secondary_sensor: local_kitchen_humidity
+
+  kitchen_boost: !include
+    file: packages/coordinators/fancoil_boost.yaml
+    vars:
+      zone_slug: "kitchen"
+      zone_name: "Kitchen"
+      temperature_sensor: kitchen_temp
+      humidity_sensor: kitchen_humidity
+      radiant_pid_id: pid_radiant_kitchen
+      radiant_pid_cool_sensor: pid_radiant_kitchen_cool
+      fancoil_pid_id: pid_fancoil_kitchen
+      radiant_override_value_id: kitchen_radiant_override_value
+      radiant_override_switch_id: kitchen_radiant_override
+      radiant_pwm_id: slow_pwm_kitchen
+      cooling_mode_sensor: summer_mode
+      temp_threshold_sensor: fancoil_boost_threshold
+      humidity_threshold_sensor: fancoil_humidity_threshold
+      predictive_minutes_sensor: predictive_boost_minutes
+
+# =============================================================================
+# What you get from this configuration:
+# =============================================================================
+#
+# Per zone (x2):
+#   - Failover temperature sensor with automatic tier switching
+#   - Failover humidity sensor with automatic tier switching
+#   - Radiant floor PID controller (base layer)
+#   - Fancoil PID controller (boost layer, auto-managed)
+#   - Fancoil Boost Coordinator with:
+#     - Temperature delta monitoring
+#     - Humidity threshold with hysteresis
+#     - Predictive PID saturation detection
+#     - Anti-oscillation protection (10 min minimum time-in-state)
+#     - Temperature trend analysis (auto-included)
+#
+# Diagnostic entities exposed to HA per zone:
+#   - {zone}_boost_active_sensor (binary: is boost active?)
+#   - {zone}_cooling_mode (text: "Fancoil Boost" or "Radiant Only")
+#   - {zone}_temp_delta (sensor: current - target temperature)
+#   - {zone}_time_in_mode (sensor: minutes in current mode)
+#   - {zone}_saturation_duration (sensor: minutes at PID saturation)
+#   - {zone}_radiant_output_pct (sensor: radiant PID output %)
+#   - {zone}_temp_trend (sensor: temperature rate of change °C/min)
+#   - {zone}_temp_sensor_tier (text: "Primary" / "Secondary" / "Emergency")
+#   - {zone}_humidity_sensor_tier (text: sensor failover tier)
+#
+# HA Helpers to create (Settings > Devices > Helpers > Number):
+#   - input_number.fancoil_boost_threshold (0-5°C, default: 1.5)
+#   - input_number.fancoil_humidity_threshold (0-100%, default: 65)
+#   - input_number.predictive_boost_minutes (1-60 min, default: 20)
+#   - binary_sensor.cooling_season (or equivalent season detection)
