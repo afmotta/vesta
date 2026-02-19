@@ -31,7 +31,7 @@
 # Example:
 #   packages:
 #     humidity_demand: !include
-#       file: packages/utils/proportional_demand_sensor.yaml
+#       file: packages/components/proportional_demand_sensor.yaml
 #       vars:
 #         component_id: "ventilation"
 #         component_name: "Ventilation"

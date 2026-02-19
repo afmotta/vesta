@@ -1,0 +1,58 @@
+# =============================================================================
+# Component: pid_autotune_with_fancoil.yaml
+# Purpose:   Safe PID autotune with fancoil and boost interference prevention.
+#            Disables boost mode and turns off the fancoil PID before starting
+#            the autotune procedure, ensuring clean tuning results.
+#
+# Required vars:
+#   room_slug                - Room identifier for entity IDs (e.g., "living_room")
+#   room_name                - Display name (e.g., "Living Room")
+#   pid_id                   - PID climate entity to tune (e.g., "pid_radiant_living_room")
+#   fancoil_pid_id           - Fancoil PID to disable during autotune
+#   boost_active_global      - ID of the boost active global bool (e.g., "living_room_boost_active")
+#
+# Exposes:
+#   button.autotune_{room_slug} - Press to start safe autotuning
+#
+# Note: Use pid_autotune.yaml for zones WITHOUT fancoils or boost coordinators.
+#
+# Example:
+#   packages:
+#     autotune: !include
+#       file: packages/components/pid_autotune_with_fancoil.yaml
+#       vars:
+#         room_slug: "living_room"
+#         room_name: "Living Room"
+#         pid_id: "pid_radiant_living_room"
+#         fancoil_pid_id: "pid_fancoil_living_room"
+#         boost_active_global: "living_room_boost_active"
+# =============================================================================
+
+button:
+  - platform: template
+    name: "Autotune ${room_name}"
+    id: autotune_${room_slug}
+    icon: "mdi:tune"
+    entity_category: config
+    on_press:
+      - logger.log:
+          format: "[Autotune] Starting autotune for ${room_name} - disabling interferences"
+          level: INFO
+      # Disable boost mode
+      - lambda: |-
+          id(${boost_active_global}) = false;
+          ESP_LOGI("autotune", "Disabled boost mode for ${room_slug}");
+      # Turn off fancoil
+      - climate.control:
+          id: ${fancoil_pid_id}
+          mode: "OFF"
+      - logger.log:
+          format: "[Autotune] Disabled fancoil ${fancoil_pid_id}"
+          level: INFO
+      # Delay to let things settle
+      - delay: 2s
+      # Start autotune
+      - climate.pid.autotune: ${pid_id}
+      - logger.log:
+          format: "[Autotune] Autotune started for ${pid_id}"
+          level: INFO

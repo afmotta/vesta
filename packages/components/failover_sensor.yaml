@@ -31,7 +31,7 @@
 # Example:
 #   packages:
 #     temp_failover: !include
-#       file: packages/utils/failover_sensor.yaml
+#       file: packages/components/failover_sensor.yaml
 #       vars:
 #         sensor_id: "living_room_temp"
 #         sensor_name: "Living Room Temperature"

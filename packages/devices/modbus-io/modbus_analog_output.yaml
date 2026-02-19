@@ -1,0 +1,87 @@
+# =============================================================================
+# Device Driver: modbus_analog_output.yaml
+# Purpose:       Control a single 0-10V analog output channel via Modbus.
+#                Creates a PID-compatible template output (0.0-1.0 float) and
+#                diagnostic sensors for capacity (%) and voltage (V).
+#                Intended to be included by modbus_analog_outputs_board.yaml.
+#
+# Required vars:
+#   controller_id            - Modbus controller ID this output belongs to
+#   output_number            - Channel number for default ID generation (e.g., 1-8)
+#   register_address         - Modbus holding register address (e.g., 0x0000)
+#
+# Optional vars:
+#   id_offset                - Offset added to output_number for entity ID
+#                              (default: 0). Useful for multi-board setups.
+#   output_id                - Override output entity ID
+#                              (default: "analog_output_${output_number + id_offset}")
+#   update_interval          - Diagnostic sensor update interval (default: 5s)
+#
+# Exposes:
+#   output.${output_id}              - PID-compatible float output (0.0-1.0)
+#   sensor.${output_id}_capacity     - Current output as percentage (0-100%)
+#   sensor.${output_id}_voltage      - Current output as voltage (0-10V)
+#
+# Example:
+#   packages:
+#     output_1: !include
+#       file: packages/devices/modbus-io/modbus_analog_output.yaml
+#       vars:
+#         controller_id: analog_board_1
+#         output_number: 1
+#         register_address: 0x0000
+#         output_id: fancoil_living_room_output
+# =============================================================================
+
+defaults:
+  id_offset: 0
+  update_interval: 5s
+  output_id: analog_output_${output_number + id_offset}
+  number_id: ${controller_id}_register_${register_address}
+
+number:
+  - platform: modbus_controller
+    modbus_controller_id: ${controller_id}
+    id: ${number_id}
+    address: ${register_address}
+    value_type: U_WORD
+    min_value: 0
+    max_value: 10000
+    mode: box
+    internal: true
+
+# Template output for PID controller integration
+# Converts PID float output (0.0-1.0) to register value (0-10000)
+output:
+  - platform: template
+    id: ${output_id}
+    type: float
+    write_action:
+      - number.set:
+          id: ${number_id}
+          value: !lambda "return state * 10000;"
+
+# Diagnostic sensors: capacity percentage and voltage
+sensor:
+  - platform: template
+    id: ${output_id}_capacity
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: "mdi:fan"
+    lambda: |-
+      if (id(${number_id}).has_state()) {
+        return id(${number_id}).state / 100.0;
+      }
+      return NAN;
+    update_interval: ${update_interval}
+  - platform: template
+    id: ${output_id}_voltage
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    icon: "mdi:flash"
+    lambda: |-
+      if (id(${number_id}).has_state()) {
+        return id(${number_id}).state / 1000.0;
+      }
+      return NAN;
+    update_interval: ${update_interval}

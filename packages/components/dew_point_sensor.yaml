@@ -1,0 +1,53 @@
+# =============================================================================
+# Component: dew_point_sensor.yaml
+# Purpose:   Calculate dew point temperature from humidity and temperature
+#            sensors using the Magnus formula approximation. Useful for
+#            radiant cooling systems to prevent condensation.
+#
+# Required vars:
+#   room_slug                - Room identifier for entity IDs (e.g., "living_room")
+#   room_name                - Human-readable room name (e.g., "Living Room")
+#   humidity_sensor          - ID of the humidity sensor
+#   temperature_sensor       - ID of the temperature sensor
+#
+# Optional vars:
+#   update_interval          - How often to recalculate (default: 30s)
+#   accuracy_decimals        - Decimal precision (default: 0)
+#
+# Exposes:
+#   sensor.{room_slug}_dew_point - Calculated dew point temperature (°C)
+#
+# Note: The Magnus formula is accurate to ~0.35°C for typical indoor
+#       conditions (0-60°C, 1-100% RH).
+#
+# Example:
+#   packages:
+#     dew_point: !include
+#       file: packages/components/dew_point_sensor.yaml
+#       vars:
+#         room_slug: "living_room"
+#         room_name: "Living Room"
+#         humidity_sensor: living_room_humidity
+#         temperature_sensor: living_room_temp
+# =============================================================================
+
+defaults:
+  update_interval: 30s
+  accuracy_decimals: "0"
+
+sensor:
+  - platform: template
+    name: "${room_name} Dew Point"
+    id: ${room_slug}_dew_point
+    update_interval: ${update_interval}
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: ${accuracy_decimals}
+    lambda: |-
+      const float alpha = 6.112; // hPa
+      const float beta = 17.62;
+      const float lambda = 243.12; // degrees C
+      float RH = id(${humidity_sensor}).raw_state; // Relative Humidity
+      float T = id(${temperature_sensor}).raw_state; // Temperature in degrees C
+      float H = log(RH / 100) + beta * T / (lambda + T);
+      return (lambda) * H / (beta - H);

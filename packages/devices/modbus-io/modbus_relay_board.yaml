@@ -1,0 +1,114 @@
+# =============================================================================
+# Device Driver: modbus_relay_board.yaml
+# Purpose:       Manage an 8-relay Modbus expansion board. Creates the
+#                modbus_controller, includes 8 relay switch instances, and
+#                monitors board connectivity via a status binary sensor.
+#
+# Required vars:
+#   controller_id            - Unique ID for this modbus_controller
+#   controller_name          - Display name for the status sensor (e.g., "Relay Board 1")
+#   modbus_address           - Modbus slave address (e.g., 0x02)
+#   modbus_bus_id            - ID of the modbus bus (e.g., "rs485_bus")
+#
+# Optional vars:
+#   update_interval          - Polling interval (default: 5s)
+#   id_offset                - Offset for relay IDs to avoid collisions across
+#                              multiple boards (default: 0). E.g., board 2 uses
+#                              id_offset: 8 so relays are numbered 9-16.
+#
+# Dependencies:
+#   - modbus_relay_switch.yaml (included automatically, must be in same directory)
+#
+# Exposes:
+#   switch.relay_{1+id_offset} through switch.relay_{8+id_offset} - 8 relay controls
+#   binary_sensor.${controller_id}_status                         - Board connectivity
+#
+# Example:
+#   packages:
+#     relays: !include
+#       file: packages/devices/modbus-io/modbus_relay_board.yaml
+#       vars:
+#         controller_id: relay_board_1
+#         controller_name: "Relay Board 1"
+#         modbus_address: 0x02
+#         modbus_bus_id: rs485_bus
+#         id_offset: 0
+# =============================================================================
+
+defaults:
+  update_interval: 5s
+  id_offset: 0
+
+modbus_controller:
+  - id: ${controller_id}
+    address: ${modbus_address}
+    modbus_id: ${modbus_bus_id}
+    update_interval: ${update_interval}
+
+packages:
+  relay_1: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 1
+      register_address: 0x0000
+      id_offset: ${id_offset}
+  relay_2: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 2
+      register_address: 0x0001
+      id_offset: ${id_offset}
+  relay_3: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 3
+      register_address: 0x0002
+      id_offset: ${id_offset}
+  relay_4: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 4
+      register_address: 0x0003
+      id_offset: ${id_offset}
+  relay_5: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 5
+      register_address: 0x0004
+      id_offset: ${id_offset}
+  relay_6: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 6
+      register_address: 0x0005
+      id_offset: ${id_offset}
+  relay_7: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 7
+      register_address: 0x0006
+      id_offset: ${id_offset}
+  relay_8: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: 8
+      register_address: 0x0007
+      id_offset: ${id_offset}
+
+binary_sensor:
+  - platform: modbus_controller
+    modbus_controller_id: ${controller_id}
+    name: "${controller_name} Status"
+    id: ${controller_id}_status
+    register_type: read
+    address: 0x0000
+    device_class: connectivity
+    internal: true

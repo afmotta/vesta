@@ -1,0 +1,70 @@
+# =============================================================================
+# Component: pid.yaml
+# Purpose:   PID controller wrapper with production-tested presets and
+#            automatic diagnostic sensor creation
+#
+# Required vars:
+#   circuit_slug             - Circuit identifier for entity IDs (e.g., "radiant_living_room")
+#   circuit_name             - Human-readable circuit name (e.g., "Radiant Living Room")
+#   sensor                   - Temperature sensor ID (e.g., sensor.living_room_temp)
+#   kp                       - Proportional gain (e.g., 0.8 for radiant, 0.2 for fancoil)
+#   ki                       - Integral gain (e.g., 0.005 for radiant, 0.01 for fancoil)
+#   kd                       - Derivative gain (e.g., 0.05)
+#
+# Optional vars:
+#   default_target_temperature - Initial setpoint (default: 20.00)
+#   visual_min_temperature     - UI minimum temperature (default: 0)
+#   visual_max_temperature     - UI maximum temperature (default: 40)
+#   visual_temperature_step    - UI temperature increment (default: 0.5)
+#
+# Dependencies:
+#   - pid_sensors.yaml (included automatically, must be in same directory)
+#
+# Exposes:
+#   climate.pid_{circuit_slug}               - PID climate entity
+#   sensor.pid_{circuit_slug}_result         - PID output value (via pid_sensors)
+#   sensor.pid_{circuit_slug}_error          - PID error signal (via pid_sensors)
+#   sensor.pid_{circuit_slug}_heat           - Heat output 0-1 (via pid_sensors)
+#   sensor.pid_{circuit_slug}_cool           - Cool output 0-1 (via pid_sensors)
+#   binary_sensor.pid_{circuit_slug}_is_active  - Whether PID is actively controlling
+#
+# Example:
+#   packages:
+#     pid: !include
+#       file: packages/components/pid.yaml
+#       vars:
+#         circuit_slug: "radiant_living_room"
+#         circuit_name: "Radiant Living Room"
+#         sensor: sensor.living_room_temp
+#         kp: 0.8
+#         ki: 0.005
+#         kd: 0.05
+# =============================================================================
+
+defaults:
+  visual_min_temperature: 0
+  visual_max_temperature: 40
+  visual_temperature_step: 0.5
+  default_target_temperature: 20.00
+
+packages:
+  pid_sensors: !include
+    file: pid_sensors.yaml
+    vars:
+      pid_id: pid_${circuit_slug}
+      pid_name: "PID ${circuit_name}"
+
+climate:
+  - platform: pid
+    id: pid_${circuit_slug}
+    name: "PID ${circuit_name}"
+    sensor: ${sensor}
+    default_target_temperature: ${default_target_temperature}
+    control_parameters:
+      kp: ${kp}
+      ki: ${ki}
+      kd: ${kd}
+    visual:
+      min_temperature: ${visual_min_temperature}
+      max_temperature: ${visual_max_temperature}
+      temperature_step: ${visual_temperature_step}

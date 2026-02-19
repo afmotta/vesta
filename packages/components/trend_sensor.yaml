@@ -17,7 +17,7 @@
 # Example:
 #   packages:
 #     trend: !include
-#       file: packages/utils/trend_sensor.yaml
+#       file: packages/components/trend_sensor.yaml
 #       vars:
 #         sensor_id: "living_room_trend"
 #         source_sensor: sensor.living_room_temperature

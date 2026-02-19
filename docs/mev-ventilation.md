@@ -136,7 +136,7 @@ Use the [proportional demand sensor](proportional-demand.md) utility to create i
 ```yaml
 packages:
   co2_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"
@@ -149,7 +149,7 @@ packages:
       rate_multiplier: "0.05"
 
   humidity_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"

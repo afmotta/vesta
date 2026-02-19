@@ -1,0 +1,66 @@
+# =============================================================================
+# Component: radiant.yaml
+# Purpose:   Dual-mode radiant floor zone (heating + cooling) with PID control,
+#            slow PWM output, manual override, and seasonal mode integration.
+#            Extends heat_only_radiant with cool output and dual-mode switching.
+#
+# Required vars:
+#   room_slug                - Room identifier for entity IDs (e.g., "living_room")
+#   room_name                - Human-readable room name (e.g., "Living Room")
+#   temperature_sensor       - Temperature sensor ID (e.g., sensor.living_room_temp)
+#   relay_id                 - Switch ID for the zone valve relay
+#   seasonal_mode_id         - ID of the seasonal mode select entity (e.g., "hp_mode")
+#
+# Optional vars:
+#   pwm_period               - Slow PWM cycle period (default: 60s)
+#   kp                       - Proportional gain (default: 0.8)
+#   ki                       - Integral gain (default: 0.005)
+#   kd                       - Derivative gain (default: 0.05)
+#
+# Dependencies:
+#   - heat_only_radiant.yaml (included automatically)
+#     - pid.yaml (included by heat_only_radiant)
+#       - pid_sensors.yaml (included by pid)
+#
+# Exposes:
+#   (all entities from heat_only_radiant.yaml, plus:)
+#   climate.pid_radiant_{room_slug} - Extended with cool_output
+#
+# Example:
+#   packages:
+#     radiant: !include
+#       file: packages/components/radiant.yaml
+#       vars:
+#         room_slug: "living_room"
+#         room_name: "Living Room"
+#         temperature_sensor: sensor.living_room_temp
+#         relay_id: relay_1
+#         seasonal_mode_id: "hp_mode"
+# =============================================================================
+
+# All required/optional vars are passed through implicitly to heat_only_radiant.yaml
+# via ESPHome's substitution inheritance (parent substitutions available in included packages)
+packages:
+  pid: !include
+    file: heat_only_radiant.yaml
+
+climate:
+  - id: !extend pid_radiant_${room_slug}
+    cool_output: radiant_output_${room_slug}
+
+# Seasonal mode handler: override heat_only_radiant's handler to support
+# both HEAT and COOL modes (heat_only_radiant only supports HEAT)
+select:
+  - id: !extend ${seasonal_mode_id}
+    on_value:
+      then:
+        - lambda: |-
+            auto call = id(pid_radiant_${room_slug}).make_call();
+            if (x == "COOL") {
+              call.set_mode(climate::CLIMATE_MODE_COOL);
+            } else if (x == "HEAT") {
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+            } else {
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+            }
+            call.perform();

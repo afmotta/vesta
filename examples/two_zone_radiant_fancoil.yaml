@@ -270,7 +270,7 @@ packages:
 
   # Failover sensors: HA (primary) → local (secondary) → Emergency (NAN)
   living_room_temp_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_temp"
       sensor_name: "Living Room Temperature"
@@ -280,7 +280,7 @@ packages:
       secondary_sensor: local_living_room_temp
 
   living_room_humidity_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_humidity"
       sensor_name: "Living Room Humidity"
@@ -315,7 +315,7 @@ packages:
   # =========================================================================
 
   kitchen_temp_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "kitchen_temp"
       sensor_name: "Kitchen Temperature"
@@ -325,7 +325,7 @@ packages:
       secondary_sensor: local_kitchen_temp
 
   kitchen_humidity_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "kitchen_humidity"
       sensor_name: "Kitchen Humidity"

@@ -1,0 +1,218 @@
+# =============================================================================
+# Coordinator: seasonal_mode.yaml
+# Purpose:     Three-tier seasonal mode selection that automatically manages
+#              HEAT/COOL/SANITARY_ONLY transitions based on calendar gates,
+#              and demand-driven shoulder season logic.
+#
+#              Tier 1: Calendar Gates (Hard Locks) — configurable date ranges
+#              Tier 2: Weather Intelligence (placeholder for future integration)
+#              Tier 3: Demand-Driven Transitions during shoulder seasons
+#
+# Required vars:
+#   seasonal_mode_id         - ID for the mode select entity (e.g., "hp_mode")
+#   seasonal_mode_name       - Display name for the mode select (e.g., "Heat Pump Mode")
+#   time_id                  - ID of the ESPHome time source (SNTP, DS1307, PCF85063, etc.)
+#
+# Optional vars:
+#   winter_start_month       - Winter lock start month (default: 10 = October)
+#   winter_start_day         - Winter lock start day (default: 15)
+#   winter_end_month         - Winter lock end month (default: 4 = April)
+#   winter_end_day           - Winter lock end day (default: 15)
+#   summer_start_month       - Summer lock start month (default: 6 = June)
+#   summer_start_day         - Summer lock start day (default: 1)
+#   summer_end_month         - Summer lock end month (default: 8 = August)
+#   summer_end_day           - Summer lock end day (default: 31)
+#   heat_demand_id           - ID of the "any PID requesting heat" binary sensor
+#                              (default: "any_pid_requesting_heat")
+#   cool_demand_id           - ID of the "any PID requesting cool" binary sensor
+#                              (default: "any_pid_requesting_cool")
+#   check_interval           - How often to evaluate calendar and demand (default: 1min)
+#
+# Exposes:
+#   select.${seasonal_mode_id}                   - Mode selector (HEAT/COOL/SANITARY_ONLY)
+#   text_sensor.${seasonal_mode_id}_reason       - Why current mode was set
+#   text_sensor.${seasonal_mode_id}_season       - Current season classification
+#   binary_sensor.${seasonal_mode_id}_summer     - Compatibility: true when COOL
+#   binary_sensor.${heat_demand_id}              - Stub — extend with demand aggregation
+#   binary_sensor.${cool_demand_id}              - Stub — extend with demand aggregation
+#
+# Usage note:
+#   The demand binary sensors (heat_demand_id, cool_demand_id) are stubs with
+#   no lambda. Your device config MUST !extend them with actual demand logic:
+#
+#     binary_sensor:
+#       - id: !extend any_pid_requesting_heat
+#         lambda: |-
+#           return id(pid_zone1_is_heating).state || id(pid_zone2_is_heating).state;
+#
+# Example:
+#   packages:
+#     seasonal: !include
+#       file: packages/coordinators/seasonal_mode.yaml
+#       vars:
+#         seasonal_mode_id: "hp_mode"
+#         seasonal_mode_name: "Heat Pump Mode"
+#         time_id: "sntp_time"
+# =============================================================================
+
+defaults:
+  winter_start_month: "10"
+  winter_start_day: "15"
+  winter_end_month: "4"
+  winter_end_day: "15"
+  summer_start_month: "6"
+  summer_start_day: "1"
+  summer_end_month: "8"
+  summer_end_day: "31"
+  heat_demand_id: "any_pid_requesting_heat"
+  cool_demand_id: "any_pid_requesting_cool"
+  check_interval: 1min
+
+select:
+  - platform: template
+    name: "${seasonal_mode_name}"
+    id: ${seasonal_mode_id}
+    options:
+      - "HEAT"
+      - "COOL"
+      - "SANITARY_ONLY"
+    icon: mdi:heat-pump
+    optimistic: true
+    restore_value: true
+
+text_sensor:
+  - platform: template
+    name: "${seasonal_mode_name} Reason"
+    id: ${seasonal_mode_id}_reason
+    icon: mdi:information-outline
+
+  - platform: template
+    name: "Season Classification"
+    id: ${seasonal_mode_id}_season
+    icon: mdi:calendar-range
+    update_interval: ${check_interval}
+    lambda: |-
+      auto time = id(${time_id}).now();
+      if (!time.is_valid()) return {"Unknown"};
+      int m = time.month;
+      int d = time.day_of_month;
+
+      // Winter Lock
+      bool in_winter = (m == ${winter_start_month} && d >= ${winter_start_day}) ||
+                       m > ${winter_start_month} || m < ${winter_end_month} ||
+                       (m == ${winter_end_month} && d < ${winter_end_day});
+      // Summer Lock
+      bool in_summer = (m >= ${summer_start_month} && m <= ${summer_end_month});
+      // Spring Shoulder: winter_end to summer_start
+      bool in_spring_shoulder = (m == ${winter_end_month} && d >= ${winter_end_day}) ||
+                                (m > ${winter_end_month} && m < ${summer_start_month});
+      // Autumn Shoulder: summer_end+1 to winter_start
+      bool in_autumn_shoulder = (m == ${summer_end_month} + 1) ||
+                                (m == ${winter_start_month} && d < ${winter_start_day});
+
+      if (in_winter) return {"Winter Lock"};
+      if (in_summer) return {"Summer Lock"};
+      if (in_spring_shoulder) return {"Spring Shoulder"};
+      if (in_autumn_shoulder) return {"Autumn Shoulder"};
+      return {"Unknown"};
+
+binary_sensor:
+  # Compatibility sensor for components that check cooling mode
+  - platform: template
+    id: ${seasonal_mode_id}_summer
+    name: "Summer Mode"
+    internal: true
+    lambda: |-
+      return id(${seasonal_mode_id}).current_option() == "COOL";
+
+  # Global demand sensors — stubs that device config MUST !extend with actual logic
+  - platform: template
+    id: ${heat_demand_id}
+    name: "Any PID Requesting Heat"
+    device_class: heat
+
+  - platform: template
+    id: ${cool_demand_id}
+    name: "Any PID Requesting Cool"
+    device_class: cold
+
+script:
+  - id: ${seasonal_mode_id}_check_calendar
+    then:
+      - lambda: |-
+          auto time = id(${time_id}).now();
+          if (!time.is_valid()) return;
+          int m = time.month;
+          int d = time.day_of_month;
+
+          // Winter Lock
+          bool in_winter = (m == ${winter_start_month} && d >= ${winter_start_day}) ||
+                           m > ${winter_start_month} || m < ${winter_end_month} ||
+                           (m == ${winter_end_month} && d < ${winter_end_day});
+          // Summer Lock
+          bool in_summer = (m >= ${summer_start_month} && m <= ${summer_end_month});
+
+          if (in_winter) {
+             if (id(${seasonal_mode_id}).current_option() != "HEAT") {
+                auto call = id(${seasonal_mode_id}).make_call();
+                call.set_option("HEAT");
+                call.perform();
+                id(${seasonal_mode_id}_reason).publish_state("CALENDAR_LOCK");
+                ESP_LOGI("seasonal_mode", "Winter Lock: HEAT");
+             }
+          } else if (in_summer) {
+             if (id(${seasonal_mode_id}).current_option() != "COOL") {
+                auto call = id(${seasonal_mode_id}).make_call();
+                call.set_option("COOL");
+                call.perform();
+                id(${seasonal_mode_id}_reason).publish_state("CALENDAR_LOCK");
+                ESP_LOGI("seasonal_mode", "Summer Lock: COOL");
+             }
+          } else {
+             // Shoulder season entry: reset to SANITARY_ONLY at transition boundaries
+             if ((m == ${winter_end_month} && d == ${winter_end_day} && time.hour == 0 && time.minute == 0) ||
+                 (m == ${summer_end_month} + 1 && d == 1 && time.hour == 0 && time.minute == 0)) {
+                if (id(${seasonal_mode_id}).current_option() != "SANITARY_ONLY") {
+                   auto call = id(${seasonal_mode_id}).make_call();
+                   call.set_option("SANITARY_ONLY");
+                   call.perform();
+                   id(${seasonal_mode_id}_reason).publish_state("CALENDAR_LOCK");
+                }
+             }
+          }
+
+  - id: ${seasonal_mode_id}_check_demand
+    then:
+      - lambda: |-
+          auto time = id(${time_id}).now();
+          if (!time.is_valid()) return;
+          int m = time.month;
+          int d = time.day_of_month;
+
+          // Shoulder periods: spring (winter_end to summer_start) and autumn (summer_end+1 to winter_start)
+          bool is_shoulder = (m == ${winter_end_month} && d >= ${winter_end_day}) ||
+                             (m > ${winter_end_month} && m < ${summer_start_month}) ||
+                             (m == ${summer_end_month} + 1) ||
+                             (m == ${winter_start_month} && d < ${winter_start_day});
+
+          if (is_shoulder) {
+            if (id(${heat_demand_id}).state && id(${seasonal_mode_id}).current_option() != "HEAT") {
+              auto call = id(${seasonal_mode_id}).make_call();
+              call.set_option("HEAT");
+              call.perform();
+              id(${seasonal_mode_id}_reason).publish_state("DEMAND");
+              ESP_LOGI("seasonal_mode", "Demand Transition: HEAT");
+            } else if (id(${cool_demand_id}).state && id(${seasonal_mode_id}).current_option() != "COOL") {
+              auto call = id(${seasonal_mode_id}).make_call();
+              call.set_option("COOL");
+              call.perform();
+              id(${seasonal_mode_id}_reason).publish_state("DEMAND");
+              ESP_LOGI("seasonal_mode", "Demand Transition: COOL");
+            }
+          }
+
+interval:
+  - interval: ${check_interval}
+    then:
+      - script.execute: ${seasonal_mode_id}_check_calendar
+      - script.execute: ${seasonal_mode_id}_check_demand

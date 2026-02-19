@@ -55,7 +55,7 @@ Every component YAML file must start with a header comment block:
 # Example:
 #   packages:
 #     trend: !include
-#       file: packages/utils/trend_sensor.yaml
+#       file: packages/components/trend_sensor.yaml
 #       vars:
 #         sensor_id: "living_room_trend"
 #         source_sensor: sensor.living_room_temperature
@@ -158,16 +158,18 @@ Every component needs a documentation page in `docs/` covering:
 
 ```
 packages/
-├── utils/           # Standalone utilities (no cross-dependencies within utils)
-└── coordinators/    # Multi-component orchestration (may depend on utils)
+├── components/      # Standalone reusable components (no cross-dependencies)
+├── coordinators/    # Multi-component orchestration (may depend on components)
+└── devices/         # Hardware device drivers (e.g., modbus-io/)
 
 docs/                # One .md file per component + getting-started, principles
 examples/            # Complete, compilable example configurations
 ```
 
-- **Utils** are independent building blocks
-- **Coordinators** orchestrate multiple systems and may depend on utils
-- Place new components in the appropriate category
+- **Components** are independent building blocks
+- **Coordinators** orchestrate multiple systems and may depend on components
+- **Devices** are hardware-specific drivers
+- Place new packages in the appropriate category
 
 ---
 

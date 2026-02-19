@@ -91,7 +91,7 @@ sensor:
 # Include the proportional demand sensor
 packages:
   humidity_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "ventilation"
       component_name: "Ventilation"
@@ -125,7 +125,7 @@ sensor:
 
 packages:
   co2_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "ventilation"
       component_name: "Ventilation"
@@ -144,7 +144,7 @@ packages:
 packages:
   humidity_demand:
     url: github://your-username/vesta-climate-framework
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"

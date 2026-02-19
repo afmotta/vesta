@@ -1,0 +1,102 @@
+# =============================================================================
+# Component: pid_sensors.yaml
+# Purpose:   Expose all PID controller internal signals as diagnostic sensors
+#            for monitoring, tuning, and Home Assistant dashboards
+#
+# Required vars:
+#   pid_id                   - ID of the PID climate entity (e.g., "pid_radiant_living_room")
+#   pid_name                 - Display name prefix (e.g., "PID Radiant Living Room")
+#
+# Exposes:
+#   sensor.{pid_id}_result         - PID output value
+#   sensor.{pid_id}_error          - PID error (setpoint - actual)
+#   sensor.{pid_id}_heat           - Heat output (0-1 range)
+#   sensor.{pid_id}_cool           - Cool output (0-1 range)
+#   sensor.{pid_id}_proportional   - P term contribution
+#   sensor.{pid_id}_integral       - I term contribution
+#   sensor.{pid_id}_derivative     - D term contribution
+#   sensor.{pid_id}_kp             - Current Kp value
+#   sensor.{pid_id}_ki             - Current Ki value
+#   sensor.{pid_id}_kd             - Current Kd value
+#   binary_sensor.{pid_id}_is_active  - PID is heating or cooling
+#   binary_sensor.{pid_id}_is_heating - PID is heating
+#   binary_sensor.{pid_id}_is_cooling - PID is cooling
+#
+# Example:
+#   packages:
+#     sensors: !include
+#       file: packages/components/pid_sensors.yaml
+#       vars:
+#         pid_id: "pid_radiant_living_room"
+#         pid_name: "PID Radiant Living Room"
+# =============================================================================
+
+sensor:
+  - platform: pid
+    name: "${pid_name} Result"
+    climate_id: ${pid_id}
+    id: ${pid_id}_result
+    type: RESULT
+  - platform: pid
+    name: "${pid_name} Error"
+    climate_id: ${pid_id}
+    id: ${pid_id}_error
+    type: ERROR
+  - platform: pid
+    name: "${pid_name} Heat"
+    climate_id: ${pid_id}
+    id: ${pid_id}_heat
+    type: HEAT
+  - platform: pid
+    name: "${pid_name} Cool"
+    climate_id: ${pid_id}
+    id: ${pid_id}_cool
+    type: COOL
+  - platform: pid
+    name: "${pid_name} Proportional"
+    climate_id: ${pid_id}
+    id: ${pid_id}_proportional
+    type: PROPORTIONAL
+  - platform: pid
+    name: "${pid_name} Integral"
+    climate_id: ${pid_id}
+    id: ${pid_id}_integral
+    type: INTEGRAL
+  - platform: pid
+    name: "${pid_name} Derivative"
+    climate_id: ${pid_id}
+    id: ${pid_id}_derivative
+    type: DERIVATIVE
+  - platform: pid
+    name: "${pid_name} KP"
+    climate_id: ${pid_id}
+    id: ${pid_id}_kp
+    type: KP
+  - platform: pid
+    name: "${pid_name} KI"
+    climate_id: ${pid_id}
+    id: ${pid_id}_ki
+    type: KI
+  - platform: pid
+    name: "${pid_name} KD"
+    climate_id: ${pid_id}
+    id: ${pid_id}_kd
+    type: KD
+
+binary_sensor:
+  - platform: template
+    name: "${pid_name} is Active"
+    id: ${pid_id}_is_active
+    lambda: |-
+      auto action = id(${pid_id}).action;
+      return (action == CLIMATE_ACTION_HEATING || action == CLIMATE_ACTION_COOLING);
+  - platform: template
+    name: "${pid_name} is Heating"
+    id: ${pid_id}_is_heating
+    lambda: |-
+      return id(${pid_id}).action == CLIMATE_ACTION_HEATING;
+  - platform: template
+    name: "${pid_name} is Cooling"
+    id: ${pid_id}_is_cooling
+    lambda: |-
+      return id(${pid_id}).action == CLIMATE_ACTION_COOLING;

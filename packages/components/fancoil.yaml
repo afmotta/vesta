@@ -1,0 +1,73 @@
+# =============================================================================
+# Component: fancoil.yaml
+# Purpose:   Fancoil unit zone control with PID, analog 0-10V output, and
+#            seasonal mode integration. Uses lower PID gains than radiant
+#            systems due to fancoils' faster thermal response.
+#
+# Required vars:
+#   room_slug                - Room identifier for entity IDs (e.g., "living_room")
+#   room_name                - Human-readable room name (e.g., "Living Room")
+#   temperature_sensor       - Temperature sensor ID (e.g., sensor.living_room_temp)
+#   output_id                - Output entity for fancoil control (e.g., analog 0-10V DAC)
+#   seasonal_mode_id         - ID of the seasonal mode select entity (e.g., "hp_mode")
+#
+# Optional vars:
+#   kp                       - Proportional gain (default: 0.2 — tuned for fast fancoil response)
+#   ki                       - Integral gain (default: 0.01)
+#   kd                       - Derivative gain (default: 0.05)
+#
+# Dependencies:
+#   - pid.yaml (included automatically, must be in same directory)
+#     - pid_sensors.yaml (included by pid)
+#
+# Exposes:
+#   climate.pid_fancoil_{room_slug}              - PID climate entity
+#   (plus all pid_sensors entities via pid.yaml)
+#
+# Example:
+#   packages:
+#     fancoil: !include
+#       file: packages/components/fancoil.yaml
+#       vars:
+#         room_slug: "living_room"
+#         room_name: "Living Room"
+#         temperature_sensor: sensor.living_room_temp
+#         output_id: fancoil_dac_living_room
+#         seasonal_mode_id: "hp_mode"
+# =============================================================================
+
+defaults:
+  kp: 0.2
+  ki: 0.01
+  kd: 0.05
+
+packages:
+  pid: !include
+    file: pid.yaml
+    vars:
+      circuit_slug: "fancoil_${room_slug}"
+      circuit_name: "Fancoil ${room_name}"
+      sensor: ${temperature_sensor}
+      kp: ${kp}
+      ki: ${ki}
+      kd: ${kd}
+
+climate:
+  - id: !extend pid_fancoil_${room_slug}
+    cool_output: ${output_id}
+
+# Seasonal mode handler: automatically switch PID mode based on seasonal mode
+select:
+  - id: !extend ${seasonal_mode_id}
+    on_value:
+      then:
+        - lambda: |-
+            auto call = id(pid_fancoil_${room_slug}).make_call();
+            if (x == "COOL") {
+              call.set_mode(climate::CLIMATE_MODE_COOL);
+            } else if (x == "HEAT") {
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+            } else {
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+            }
+            call.perform();

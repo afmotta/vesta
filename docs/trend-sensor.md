@@ -38,7 +38,7 @@ Use cases include detecting rapid temperature drops (window opened), humidity sp
 ```yaml
 packages:
   temp_trend: !include
-    file: packages/utils/trend_sensor.yaml
+    file: packages/components/trend_sensor.yaml
     vars:
       sensor_id: "living_room_temp_trend"
       source_sensor: sensor.living_room_temperature
@@ -52,7 +52,7 @@ packages:
 ```yaml
 packages:
   humidity_trend: !include
-    file: packages/utils/trend_sensor.yaml
+    file: packages/components/trend_sensor.yaml
     vars:
       sensor_id: "bathroom_humidity_trend"
       source_sensor: sensor.bathroom_humidity
@@ -67,7 +67,7 @@ packages:
 packages:
   trend:
     url: github://your-username/vesta-climate-framework
-    file: packages/utils/trend_sensor.yaml
+    file: packages/components/trend_sensor.yaml
     vars:
       sensor_id: "room_temp_trend"
       source_sensor: sensor.room_temperature

@@ -19,7 +19,7 @@ Copy the `packages/` directory into your ESPHome project, then reference compone
 ```yaml
 packages:
   my_trend: !include
-    file: vesta/packages/utils/trend_sensor.yaml
+    file: vesta/packages/components/trend_sensor.yaml
     vars:
       sensor_id: "room_temp_trend"
       source_sensor: room_temperature
@@ -34,7 +34,7 @@ Reference packages directly from GitHub without downloading:
 packages:
   my_trend:
     url: github://your-username/vesta-climate-framework
-    file: packages/utils/trend_sensor.yaml
+    file: packages/components/trend_sensor.yaml
     vars:
       sensor_id: "room_temp_trend"
       source_sensor: room_temperature
@@ -66,7 +66,7 @@ The [trend sensor](trend-sensor.md) is the smallest component (60 lines). It tak
 ```yaml
 packages:
   temp_trend: !include
-    file: packages/utils/trend_sensor.yaml
+    file: packages/components/trend_sensor.yaml
     vars:
       sensor_id: "my_temp_trend"
       source_sensor: my_temperature_sensor
@@ -80,7 +80,7 @@ The [failover sensor](failover-sensor.md) adds reliability to any sensor by prov
 ```yaml
 packages:
   temp_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "room_temp"
       sensor_name: "Room Temperature"
@@ -104,14 +104,18 @@ Once you're comfortable with the utilities, move to the coordinators:
 ## Component Dependency Map
 
 ```
+radiant.yaml ──includes──▶ heat_only_radiant.yaml ──includes──▶ pid.yaml ──includes──▶ pid_sensors.yaml
+fancoil.yaml ──includes──▶ pid.yaml
+mixing_pump.yaml ──includes──▶ pid.yaml
 fancoil_boost.yaml ──uses──▶ trend_sensor.yaml
-mev_ventilation.yaml ──uses──▶ (external demand sensor)
 proportional_demand_sensor.yaml ──uses──▶ trend_sensor.yaml
-failover_sensor.yaml (standalone)
-trend_sensor.yaml (standalone)
+modbus_relay_board.yaml ──includes──▶ modbus_relay_switch.yaml (×8)
+modbus_analog_outputs_board.yaml ──includes──▶ modbus_analog_output.yaml (×8)
+
+Standalone: trend_sensor, failover_sensor, dew_point_sensor, direct_pump, seasonal_mode
 ```
 
-Coordinators may depend on utilities. Utilities are standalone and independent of each other.
+Components include their dependencies automatically. You only need to include the top-level component.
 
 ## Complete Example
 
@@ -122,10 +126,43 @@ Two complete examples are available:
 
 ## Component Reference
 
-| Component | Type | Docs |
-|-----------|------|------|
-| Trend Sensor | Utility | [trend-sensor.md](trend-sensor.md) |
-| Failover Sensor | Utility | [failover-sensor.md](failover-sensor.md) |
-| Proportional Demand Sensor | Utility | [proportional-demand.md](proportional-demand.md) |
-| Fancoil Boost Coordinator | Coordinator | [fancoil-boost.md](fancoil-boost.md) |
-| MEV Ventilation Coordinator | Coordinator | [mev-ventilation.md](mev-ventilation.md) |
+### Utility Components
+
+| Component | Docs |
+|-----------|------|
+| Trend Sensor | [trend-sensor.md](trend-sensor.md) |
+| Failover Sensor | [failover-sensor.md](failover-sensor.md) |
+| Proportional Demand Sensor | [proportional-demand.md](proportional-demand.md) |
+| Dew Point Sensor | [dew-point-sensor.md](dew-point-sensor.md) |
+
+### Zone Components (PID Control)
+
+| Component | Docs |
+|-----------|------|
+| PID Controller | [pid.md](pid.md) |
+| PID Autotune | [pid-autotune.md](pid-autotune.md) |
+| Heat-Only Radiant | [heat-only-radiant.md](heat-only-radiant.md) |
+| Radiant (Heat + Cool) | [radiant.md](radiant.md) |
+| Fancoil | [fancoil.md](fancoil.md) |
+
+### Pump Components
+
+| Component | Docs |
+|-----------|------|
+| Direct Pump | [direct-pump.md](direct-pump.md) |
+| Mixing Pump | [mixing-pump.md](mixing-pump.md) |
+
+### Coordinators
+
+| Component | Docs |
+|-----------|------|
+| Seasonal Mode | [seasonal-mode.md](seasonal-mode.md) |
+| Fancoil Boost | [fancoil-boost.md](fancoil-boost.md) |
+| MEV Ventilation | [mev-ventilation.md](mev-ventilation.md) |
+
+### Device Drivers
+
+| Component | Docs |
+|-----------|------|
+| Modbus Relay Board | [modbus-relay-board.md](modbus-relay-board.md) |
+| Modbus Analog Board | [modbus-analog-board.md](modbus-analog-board.md) |

@@ -1,0 +1,40 @@
+# =============================================================================
+# Device Driver: modbus_relay_switch.yaml
+# Purpose:       Control a single relay via Modbus coil register. Intended to
+#                be included by a board aggregator (modbus_relay_board.yaml),
+#                not used standalone.
+#
+# Required vars:
+#   controller_id            - Modbus controller ID this relay belongs to
+#   switch_number            - Relay number for display name (e.g., 1-8)
+#   register_address         - Coil register address (e.g., 0x0000)
+#
+# Optional vars:
+#   id_offset                - Offset added to switch_number for entity ID
+#                              (default: 0). Useful for multi-board setups.
+#
+# Exposes:
+#   switch.relay_${switch_number + id_offset} - Relay on/off control
+#
+# Example:
+#   packages:
+#     relay_1: !include
+#       file: packages/devices/modbus-io/modbus_relay_switch.yaml
+#       vars:
+#         controller_id: relay_board_1
+#         switch_number: 1
+#         register_address: 0x0000
+# =============================================================================
+
+defaults:
+  id_offset: 0
+  offset_switch_number: ${switch_number + id_offset}
+
+switch:
+  - platform: modbus_controller
+    modbus_controller_id: ${controller_id}
+    name: "Relay ${offset_switch_number}"
+    id: relay_${offset_switch_number}
+    register_type: coil
+    address: ${register_address}
+    icon: mdi:electric-switch

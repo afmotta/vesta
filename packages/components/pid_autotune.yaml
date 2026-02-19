@@ -1,0 +1,42 @@
+# =============================================================================
+# Component: pid_autotune.yaml
+# Purpose:   Basic PID autotune button — triggers ESPHome's built-in PID
+#            auto-tuning procedure for a single PID controller
+#
+# Required vars:
+#   pid_name                 - Display name (e.g., "Radiant Living Room")
+#   pid_id                   - PID climate entity to tune (e.g., "pid_radiant_living_room")
+#
+# Exposes:
+#   button.autotune_{pid_id} - Press to start autotuning
+#
+# Note: For zones with fancoils or boost coordinators, use
+#       pid_autotune_with_fancoil.yaml instead — it disables interference
+#       sources before starting the autotune procedure.
+#
+# Example:
+#   packages:
+#     autotune: !include
+#       file: packages/components/pid_autotune.yaml
+#       vars:
+#         pid_name: "Radiant Living Room"
+#         pid_id: "pid_radiant_living_room"
+# =============================================================================
+
+button:
+  - platform: template
+    name: "Autotune ${pid_name}"
+    id: autotune_${pid_id}
+    icon: "mdi:tune"
+    entity_category: config
+    on_press:
+      - logger.log:
+          format: "[Autotune] Starting autotune for ${pid_name}"
+          level: INFO
+      # Small delay to let things settle
+      - delay: 2s
+      # Start autotune
+      - climate.pid.autotune: ${pid_id}
+      - logger.log:
+          format: "[Autotune] Autotune started for ${pid_id}"
+          level: INFO

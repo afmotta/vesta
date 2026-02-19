@@ -1,0 +1,97 @@
+# =============================================================================
+# Component: mixing_pump.yaml
+# Purpose:   Mixing valve + pump control with PID-driven valve position and
+#            Dallas temperature sensor for supply water monitoring. The PID
+#            controls valve position based on supply temperature; a binary
+#            sensor triggers the circulation pump relay.
+#
+# Required vars:
+#   area_slug                - Area identifier for entity IDs (e.g., "ground_floor")
+#   area_name                - Human-readable area name (e.g., "Ground Floor")
+#   dallas_address           - Dallas temperature sensor address (e.g., "0x01234567890ABCDE")
+#   one_wire_bus_id          - One-Wire bus ID (e.g., "one_wire_01")
+#   output_id                - Output entity for mixing valve control signal
+#   sensor_id                - Binary sensor ID that triggers pump on/off
+#   relay_id                 - Switch ID for the circulation pump relay
+#
+# Optional vars:
+#   kp                       - Proportional gain (default: 0.2)
+#   ki                       - Integral gain (default: 0.01)
+#   kd                       - Derivative gain (default: 0.0)
+#   valve_slug               - Valve entity slug (default: "mixing_valve_${area_slug}")
+#   valve_name               - Valve display name (default: "Mixing Valve for ${area_name}")
+#
+# Dependencies:
+#   - pid.yaml (included automatically, must be in same directory)
+#     - pid_sensors.yaml (included by pid.yaml)
+#
+# Exposes:
+#   sensor.dallas_{dallas_address}               - Supply water temperature
+#   climate.pid_{valve_slug}                     - PID climate for valve control
+#   binary_sensor.{sensor_id}_wrapped            - Pump trigger wrapper
+#   (plus all pid_sensors entities via pid.yaml)
+#
+# Example:
+#   packages:
+#     mixing: !include
+#       file: packages/components/mixing_pump.yaml
+#       vars:
+#         area_slug: "ground_floor"
+#         area_name: "Ground Floor"
+#         dallas_address: "0x01234567890ABCDE"
+#         one_wire_bus_id: "one_wire_01"
+#         output_id: mixing_valve_output
+#         sensor_id: ground_floor_demand
+#         relay_id: relay_13
+# =============================================================================
+
+defaults:
+  kp: 0.2
+  ki: 0.01
+  kd: 0.0
+  valve_slug: "mixing_valve_${area_slug}"
+  valve_name: "Mixing Valve for ${area_name}"
+
+sensor:
+  - platform: dallas_temp
+    address: ${dallas_address}
+    name: "Dallas ${dallas_address}"
+    id: dallas_${dallas_address}
+    unit_of_measurement: "°C"
+    one_wire_id: ${one_wire_bus_id}
+
+packages:
+  pid: !include
+    file: pid.yaml
+    vars:
+      circuit_slug: "${valve_slug}"
+      circuit_name: "${valve_name}"
+      sensor: dallas_${dallas_address}
+      kp: ${kp}
+      ki: ${ki}
+      kd: ${kd}
+
+climate:
+  - id: !extend pid_${valve_slug}
+    heat_output: ${output_id}
+    cool_output: ${output_id}
+
+binary_sensor:
+  - platform: template
+    id: ${sensor_id}_wrapped
+    lambda: |-
+      return id(${sensor_id});
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: "return x;"
+            then:
+              - logger.log:
+                  format: "Mixing pump for ${area_name} ON"
+              - switch.turn_on: ${relay_id}
+            else:
+              - logger.log:
+                  format: "Mixing pump for ${area_name} OFF"
+              - switch.turn_off: ${relay_id}

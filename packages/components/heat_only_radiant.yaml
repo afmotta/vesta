@@ -1,0 +1,133 @@
+# =============================================================================
+# Component: heat_only_radiant.yaml
+# Purpose:   Heat-only radiant floor zone with PID control, slow PWM output,
+#            manual override capability, and seasonal mode integration.
+#            For zones that only provide heating (no cooling through the floor).
+#
+# Required vars:
+#   room_slug                - Room identifier for entity IDs (e.g., "living_room")
+#   room_name                - Human-readable room name (e.g., "Living Room")
+#   temperature_sensor       - Temperature sensor ID (e.g., sensor.living_room_temp)
+#   relay_id                 - Switch ID for the zone valve relay
+#   seasonal_mode_id         - ID of the seasonal mode select entity (e.g., "hp_mode")
+#
+# Optional vars:
+#   pwm_period               - Slow PWM cycle period (default: 60s)
+#   kp                       - Proportional gain (default: 0.8)
+#   ki                       - Integral gain (default: 0.005)
+#   kd                       - Derivative gain (default: 0.05)
+#
+# Dependencies:
+#   - pid.yaml (included automatically, must be in same directory)
+#     - pid_sensors.yaml (included by pid.yaml)
+#
+# Exposes:
+#   climate.pid_radiant_{room_slug}               - PID climate entity
+#   switch.{room_slug}_radiant_override            - Enable/disable output override
+#   number.{room_slug}_radiant_override_value      - Override output value (0-100%)
+#   output.radiant_output_{room_slug}              - Template output (PID or override)
+#   output.slow_pwm_{room_slug}                    - Slow PWM driving the relay
+#   (plus all pid_sensors entities via pid.yaml)
+#
+# Example:
+#   packages:
+#     radiant: !include
+#       file: packages/components/heat_only_radiant.yaml
+#       vars:
+#         room_slug: "bedroom_north"
+#         room_name: "Bedroom North"
+#         temperature_sensor: sensor.bedroom_north_temp
+#         relay_id: relay_3
+#         seasonal_mode_id: "hp_mode"
+# =============================================================================
+
+defaults:
+  pwm_period: 60s
+  kp: 0.8
+  ki: 0.005
+  kd: 0.05
+
+packages:
+  pid: !include
+    file: pid.yaml
+    vars:
+      circuit_slug: "radiant_${room_slug}"
+      circuit_name: "Radiant ${room_name}"
+      sensor: ${temperature_sensor}
+      kp: ${kp}
+      ki: ${ki}
+      kd: ${kd}
+
+# Override mechanism for boost mode
+# When override is active, PID output is ignored and override_value is used
+# Exposed to HA for manual intervention if needed
+
+# Switch to enable/disable output override
+switch:
+  - platform: template
+    id: ${room_slug}_radiant_override
+    name: "${room_name} Radiant Override"
+    icon: "mdi:lock"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+
+# Number to set the override output value (0-100%)
+number:
+  - platform: template
+    id: ${room_slug}_radiant_override_value
+    name: "${room_name} Radiant Override Value"
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    entity_category: config
+    mode: slider
+
+# Template output that respects override flag
+# PID writes here; this decides whether to pass through or use override_value
+output:
+  - platform: template
+    id: radiant_output_${room_slug}
+    type: float
+    write_action:
+      - lambda: |-
+          if (id(${room_slug}_radiant_override).state) {
+            // Override active: use override_value (convert from % to 0-1)
+            id(slow_pwm_${room_slug}).set_level(id(${room_slug}_radiant_override_value).state / 100.0);
+          } else {
+            // Normal mode: pass through PID output
+            id(slow_pwm_${room_slug}).set_level(state);
+          }
+
+  # Actual slow_pwm output that controls the relay
+  - platform: slow_pwm
+    id: slow_pwm_${room_slug}
+    period: ${pwm_period}
+    turn_on_action:
+      - switch.turn_on: ${relay_id}
+    turn_off_action:
+      - switch.turn_off: ${relay_id}
+
+climate:
+  - id: !extend pid_radiant_${room_slug}
+    heat_output: radiant_output_${room_slug}
+
+# Seasonal mode handler: automatically switch PID mode based on seasonal mode
+# Heat-only zones are disabled during COOL mode
+select:
+  - id: !extend ${seasonal_mode_id}
+    on_value:
+      then:
+        - lambda: |-
+            auto call = id(pid_radiant_${room_slug}).make_call();
+            if (x == "HEAT") {
+              call.set_mode(climate::CLIMATE_MODE_HEAT);
+            } else {
+              call.set_mode(climate::CLIMATE_MODE_OFF);
+            }
+            call.perform();

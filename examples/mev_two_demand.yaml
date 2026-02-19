@@ -148,7 +148,7 @@ packages:
   #   sensor.mev_humidity_lower   - Lower bound (from HA, used by controller)
   #   sensor.mev_humidity_upper   - Upper bound (from HA)
   humidity_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"
@@ -171,7 +171,7 @@ packages:
   #   sensor.mev_co2_demand  - CO2 demand percentage
   #   sensor.mev_co2_rate    - CO2 rate of change (ppm/min)
   co2_demand: !include
-    file: packages/utils/proportional_demand_sensor.yaml
+    file: packages/components/proportional_demand_sensor.yaml
     vars:
       component_id: "mev"
       component_name: "MEV"

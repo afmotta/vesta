@@ -87,7 +87,7 @@ sensor:
 # Then include the failover package
 packages:
   temp_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_temp"
       sensor_name: "Living Room Temperature"
@@ -102,7 +102,7 @@ packages:
 ```yaml
 packages:
   humidity_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_humidity"
       sensor_name: "Living Room Humidity"
@@ -118,7 +118,7 @@ packages:
 packages:
   failover:
     url: github://your-username/vesta-climate-framework
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "room_temp"
       sensor_name: "Room Temperature"

@@ -105,12 +105,12 @@ After any mode transition, the coordinator ignores trigger conditions for this d
 
 ## Dependency
 
-This component **automatically includes** `trend_sensor.yaml` from `../utils/`. The trend sensor monitors the zone temperature for rate-of-change data used by the predictive trigger.
+This component **automatically includes** `trend_sensor.yaml` from `../components/`. The trend sensor monitors the zone temperature for rate-of-change data used by the predictive trigger.
 
 **Dependency chain:**
 ```
 fancoil_boost.yaml (packages/coordinators/)
-└── trend_sensor.yaml (packages/utils/, auto-included)
+└── trend_sensor.yaml (packages/components/, auto-included)
 ```
 
 ## Parameter Reference
@@ -169,7 +169,7 @@ This example shows how to wire up all the required entities for one cooling zone
 # Zone sensors (from failover_sensor or direct)
 packages:
   temp_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_temp"
       sensor_name: "Living Room Temperature"
@@ -179,7 +179,7 @@ packages:
       secondary_sensor: modbus_living_room_temp
 
   humidity_failover: !include
-    file: packages/utils/failover_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_humidity"
       sensor_name: "Living Room Humidity"

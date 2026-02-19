@@ -26,7 +26,7 @@
 #   saturated_output_threshold   - PID output level = "saturated" (default: 0.95)
 #
 # Dependencies:
-#   - ../utils/trend_sensor.yaml (included automatically)
+#   - ../components/trend_sensor.yaml (included automatically)
 #
 # Activation Triggers (OR logic - any one triggers boost):
 #   1. Reactive:   temp delta > threshold (room too warm for radiant)
@@ -69,7 +69,7 @@
 
 packages:
   temp_trend: !include
-    file: ../utils/trend_sensor.yaml
+    file: ../components/trend_sensor.yaml
     vars:
       sensor_id: ${zone_slug}_temp_trend
       source_sensor: ${temperature_sensor}

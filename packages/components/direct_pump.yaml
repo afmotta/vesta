@@ -1,0 +1,42 @@
+# =============================================================================
+# Component: direct_pump.yaml
+# Purpose:   Simple circulation pump control — turns a relay on/off based on
+#            a binary sensor trigger signal. No PID or mixing valve involved.
+#
+# Required vars:
+#   sensor_id                - Binary sensor ID that triggers pump on/off
+#   area_name                - Human-readable area name for log messages (e.g., "First Floor")
+#   relay_id                 - Switch ID for the circulation pump relay
+#
+# Exposes:
+#   binary_sensor.{sensor_id}_wrapped - Internal pump trigger wrapper
+#
+# Example:
+#   packages:
+#     pump: !include
+#       file: packages/components/direct_pump.yaml
+#       vars:
+#         sensor_id: first_floor_demand
+#         area_name: "First Floor"
+#         relay_id: relay_14
+# =============================================================================
+
+binary_sensor:
+  - platform: template
+    id: ${sensor_id}_wrapped
+    lambda: |-
+      return id(${sensor_id});
+    internal: true
+    on_state:
+      then:
+        - if:
+            condition:
+              lambda: "return x;"
+            then:
+              - logger.log:
+                  format: "Direct pump for ${area_name} ON"
+              - switch.turn_on: ${relay_id}
+            else:
+              - logger.log:
+                  format: "Direct pump for ${area_name} OFF"
+              - switch.turn_off: ${relay_id}
