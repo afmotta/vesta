@@ -51,65 +51,57 @@ packages:
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 1
+      output_number: ${1 + id_offset}
       register_address: 0x0000
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_2: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 2
+      output_number: ${2 + id_offset}
       register_address: 0x0001
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_3: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 3
+      output_number: ${3 + id_offset}
       register_address: 0x0002
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_4: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 4
+      output_number: ${4 + id_offset}
       register_address: 0x0003
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_5: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 5
+      output_number: ${5 + id_offset}
       register_address: 0x0004
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_6: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 6
+      output_number: ${6 + id_offset}
       register_address: 0x0005
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_7: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 7
+      output_number: ${7 + id_offset}
       register_address: 0x0006
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
   output_8: !include
     file: modbus_analog_output.yaml
     vars:
       controller_id: ${controller_id}
-      output_number: 8
+      output_number: ${8 + id_offset}
       register_address: 0x0007
-      id_offset: ${id_offset}
       update_interval: ${update_interval}
 
 binary_sensor:

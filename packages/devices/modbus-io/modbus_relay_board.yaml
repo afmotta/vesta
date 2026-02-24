@@ -50,58 +50,50 @@ packages:
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 1
+      switch_number: ${1 + id_offset}
       register_address: 0x0000
-      id_offset: ${id_offset}
   relay_2: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 2
+      switch_number: ${2 + id_offset}
       register_address: 0x0001
-      id_offset: ${id_offset}
   relay_3: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 3
+      switch_number: ${3 + id_offset}
       register_address: 0x0002
-      id_offset: ${id_offset}
   relay_4: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 4
+      switch_number: ${4 + id_offset}
       register_address: 0x0003
-      id_offset: ${id_offset}
   relay_5: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 5
+      switch_number: ${5 + id_offset}
       register_address: 0x0004
-      id_offset: ${id_offset}
   relay_6: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 6
+      switch_number: ${6 + id_offset}
       register_address: 0x0005
-      id_offset: ${id_offset}
   relay_7: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 7
+      switch_number: ${7 + id_offset}
       register_address: 0x0006
-      id_offset: ${id_offset}
   relay_8: !include
     file: modbus_relay_switch.yaml
     vars:
       controller_id: ${controller_id}
-      switch_number: 8
+      switch_number: ${8 + id_offset}
       register_address: 0x0007
-      id_offset: ${id_offset}
 
 binary_sensor:
   - platform: modbus_controller

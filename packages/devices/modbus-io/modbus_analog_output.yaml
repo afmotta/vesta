@@ -11,10 +11,7 @@
 #   register_address         - Modbus holding register address (e.g., 0x0000)
 #
 # Optional vars:
-#   id_offset                - Offset added to output_number for entity ID
-#                              (default: 0). Useful for multi-board setups.
-#   output_id                - Override output entity ID
-#                              (default: "analog_output_${output_number + id_offset}")
+#
 #   update_interval          - Diagnostic sensor update interval (default: 5s)
 #
 # Exposes:
@@ -34,9 +31,8 @@
 # =============================================================================
 
 defaults:
-  id_offset: 0
   update_interval: 5s
-  output_id: analog_output_${output_number + id_offset}
+  output_id: analog_output_${output_number}
   number_id: ${controller_id}_register_${register_address}
 
 number:
