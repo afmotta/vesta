@@ -22,11 +22,11 @@
 #     - pid_sensors.yaml (included by pid.yaml)
 #
 # Exposes:
-#   climate.pid_radiant_{room_slug}               - PID climate entity
+#   climate.{room_slug}_radiant_pid                - PID climate entity
 #   switch.{room_slug}_radiant_override            - Enable/disable output override
 #   number.{room_slug}_radiant_override_value      - Override output value (0-100%)
-#   output.radiant_output_{room_slug}              - Template output (PID or override)
-#   output.slow_pwm_{room_slug}                    - Slow PWM driving the relay
+#   output.{room_slug}_radiant_output              - Template output (PID or override)
+#   output.{room_slug}_radiant_pwm                 - Slow PWM driving the relay
 #   (plus all pid_sensors entities via pid.yaml)
 #
 # Example:
@@ -51,8 +51,8 @@ packages:
   pid: !include
     file: pid.yaml
     vars:
-      circuit_slug: "radiant_${room_slug}"
-      circuit_name: "Radiant ${room_name}"
+      circuit_slug: "${room_slug}_radiant"
+      circuit_name: "${room_name} Radiant"
       sensor: ${temperature_sensor}
       kp: ${kp}
       ki: ${ki}
@@ -92,21 +92,21 @@ number:
 # PID writes here; this decides whether to pass through or use override_value
 output:
   - platform: template
-    id: radiant_output_${room_slug}
+    id: ${room_slug}_radiant_output
     type: float
     write_action:
       - lambda: |-
           if (id(${room_slug}_radiant_override).state) {
             // Override active: use override_value (convert from % to 0-1)
-            id(slow_pwm_${room_slug}).set_level(id(${room_slug}_radiant_override_value).state / 100.0);
+            id(${room_slug}_radiant_pwm).set_level(id(${room_slug}_radiant_override_value).state / 100.0);
           } else {
             // Normal mode: pass through PID output
-            id(slow_pwm_${room_slug}).set_level(state);
+            id(${room_slug}_radiant_pwm).set_level(state);
           }
 
   # Actual slow_pwm output that controls the relay
   - platform: slow_pwm
-    id: slow_pwm_${room_slug}
+    id: ${room_slug}_radiant_pwm
     period: ${pwm_period}
     turn_on_action:
       - switch.turn_on: ${relay_id}
@@ -114,8 +114,8 @@ output:
       - switch.turn_off: ${relay_id}
 
 climate:
-  - id: !extend pid_radiant_${room_slug}
-    heat_output: radiant_output_${room_slug}
+  - id: !extend ${room_slug}_radiant_pid
+    heat_output: ${room_slug}_radiant_output
 
 # Seasonal mode handler: automatically switch PID mode based on seasonal mode
 # Heat-only zones are disabled during COOL mode
@@ -124,7 +124,7 @@ select:
     on_value:
       then:
         - lambda: |-
-            auto call = id(pid_radiant_${room_slug}).make_call();
+            auto call = id(${room_slug}_radiant_pid).make_call();
             if (x == "HEAT") {
               call.set_mode(climate::CLIMATE_MODE_HEAT);
             } else {

@@ -7,12 +7,12 @@
 # Required vars:
 #   room_slug                - Room identifier for entity IDs (e.g., "living_room")
 #   room_name                - Display name (e.g., "Living Room")
-#   pid_id                   - PID climate entity to tune (e.g., "pid_radiant_living_room")
+#   pid_id                   - PID climate entity to tune (e.g., "living_room_radiant_pid")
 #   fancoil_pid_id           - Fancoil PID to disable during autotune
 #   boost_active_global      - ID of the boost active global bool (e.g., "living_room_boost_active")
 #
 # Exposes:
-#   button.autotune_{room_slug} - Press to start safe autotuning
+#   button.{room_slug}_radiant_autotune - Press to start safe autotuning
 #
 # Note: Use pid_autotune.yaml for zones WITHOUT fancoils or boost coordinators.
 #
@@ -23,15 +23,15 @@
 #       vars:
 #         room_slug: "living_room"
 #         room_name: "Living Room"
-#         pid_id: "pid_radiant_living_room"
-#         fancoil_pid_id: "pid_fancoil_living_room"
+#         pid_id: "living_room_radiant_pid"
+#         fancoil_pid_id: "living_room_fancoil_pid"
 #         boost_active_global: "living_room_boost_active"
 # =============================================================================
 
 button:
   - platform: template
-    name: "Autotune ${room_name}"
-    id: autotune_${room_slug}
+    name: "${room_name} Radiant Autotune"
+    id: ${room_slug}_radiant_autotune
     icon: "mdi:tune"
     entity_category: config
     on_press:

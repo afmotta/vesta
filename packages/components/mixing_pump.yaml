@@ -18,8 +18,8 @@
 #   kp                       - Proportional gain (default: 0.2)
 #   ki                       - Integral gain (default: 0.01)
 #   kd                       - Derivative gain (default: 0.0)
-#   valve_slug               - Valve entity slug (default: "mixing_valve_${area_slug}")
-#   valve_name               - Valve display name (default: "Mixing Valve for ${area_name}")
+#   valve_slug               - Valve entity slug (default: "${area_slug}_mixing_valve")
+#   valve_name               - Valve display name (default: "${area_name} Mixing Valve")
 #
 # Dependencies:
 #   - pid.yaml (included automatically, must be in same directory)
@@ -27,7 +27,7 @@
 #
 # Exposes:
 #   sensor.dallas_{dallas_address}               - Supply water temperature
-#   climate.pid_{valve_slug}                     - PID climate for valve control
+#   climate.{valve_slug}_pid                     - PID climate for valve control
 #   binary_sensor.{sensor_id}_wrapped            - Pump trigger wrapper
 #   (plus all pid_sensors entities via pid.yaml)
 #
@@ -49,8 +49,8 @@ defaults:
   kp: 0.2
   ki: 0.01
   kd: 0.0
-  valve_slug: "mixing_valve_${area_slug}"
-  valve_name: "Mixing Valve for ${area_name}"
+  valve_slug: "${area_slug}_mixing_valve"
+  valve_name: "${area_name} Mixing Valve"
 
 sensor:
   - platform: dallas_temp
@@ -72,7 +72,7 @@ packages:
       kd: ${kd}
 
 climate:
-  - id: !extend pid_${valve_slug}
+  - id: !extend ${valve_slug}_pid
     heat_output: ${output_id}
     cool_output: ${output_id}
 

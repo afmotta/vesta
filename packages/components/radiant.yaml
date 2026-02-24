@@ -24,7 +24,7 @@
 #
 # Exposes:
 #   (all entities from heat_only_radiant.yaml, plus:)
-#   climate.pid_radiant_{room_slug} - Extended with cool_output
+#   climate.{room_slug}_radiant_pid - Extended with cool_output
 #
 # Example:
 #   packages:
@@ -45,8 +45,8 @@ packages:
     file: heat_only_radiant.yaml
 
 climate:
-  - id: !extend pid_radiant_${room_slug}
-    cool_output: radiant_output_${room_slug}
+  - id: !extend ${room_slug}_radiant_pid
+    cool_output: ${room_slug}_radiant_output
 
 # Seasonal mode handler: override heat_only_radiant's handler to support
 # both HEAT and COOL modes (heat_only_radiant only supports HEAT)
@@ -55,7 +55,7 @@ select:
     on_value:
       then:
         - lambda: |-
-            auto call = id(pid_radiant_${room_slug}).make_call();
+            auto call = id(${room_slug}_radiant_pid).make_call();
             if (x == "COOL") {
               call.set_mode(climate::CLIMATE_MODE_COOL);
             } else if (x == "HEAT") {

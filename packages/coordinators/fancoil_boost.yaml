@@ -55,12 +55,12 @@
 #         zone_name: "Living Room"
 #         temperature_sensor: living_room_temp
 #         humidity_sensor: living_room_humidity
-#         radiant_pid_id: pid_radiant_living_room
-#         radiant_pid_cool_sensor: pid_radiant_living_room_cool
-#         fancoil_pid_id: pid_fancoil_living_room
+#         radiant_pid_id: living_room_radiant_pid
+#         radiant_pid_cool_sensor: living_room_radiant_pid_cool
+#         fancoil_pid_id: living_room_fancoil_pid
 #         radiant_override_value_id: living_room_radiant_override_value
 #         radiant_override_switch_id: living_room_radiant_override
-#         radiant_pwm_id: slow_pwm_living_room
+#         radiant_pwm_id: living_room_radiant_output
 #         cooling_mode_sensor: summer_mode
 #         temp_threshold_sensor: fancoil_boost_threshold
 #         humidity_threshold_sensor: fancoil_humidity_threshold

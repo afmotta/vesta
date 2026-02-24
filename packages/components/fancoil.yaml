@@ -21,7 +21,7 @@
 #     - pid_sensors.yaml (included by pid)
 #
 # Exposes:
-#   climate.pid_fancoil_{room_slug}              - PID climate entity
+#   climate.{room_slug}_fancoil_pid              - PID climate entity
 #   (plus all pid_sensors entities via pid.yaml)
 #
 # Example:
@@ -45,15 +45,15 @@ packages:
   pid: !include
     file: pid.yaml
     vars:
-      circuit_slug: "fancoil_${room_slug}"
-      circuit_name: "Fancoil ${room_name}"
+      circuit_slug: "${room_slug}_fancoil"
+      circuit_name: "${room_name} Fancoil"
       sensor: ${temperature_sensor}
       kp: ${kp}
       ki: ${ki}
       kd: ${kd}
 
 climate:
-  - id: !extend pid_fancoil_${room_slug}
+  - id: !extend ${room_slug}_fancoil_pid
     cool_output: ${output_id}
 
 # Seasonal mode handler: automatically switch PID mode based on seasonal mode
@@ -62,7 +62,7 @@ select:
     on_value:
       then:
         - lambda: |-
-            auto call = id(pid_fancoil_${room_slug}).make_call();
+            auto call = id(${room_slug}_fancoil_pid).make_call();
             if (x == "COOL") {
               call.set_mode(climate::CLIMATE_MODE_COOL);
             } else if (x == "HEAT") {

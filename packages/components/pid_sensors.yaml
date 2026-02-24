@@ -4,8 +4,8 @@
 #            for monitoring, tuning, and Home Assistant dashboards
 #
 # Required vars:
-#   pid_id                   - ID of the PID climate entity (e.g., "pid_radiant_living_room")
-#   pid_name                 - Display name prefix (e.g., "PID Radiant Living Room")
+#   pid_id                   - ID of the PID climate entity (e.g., "living_room_radiant_pid")
+#   pid_name                 - Display name prefix (e.g., "Living Room Radiant PID")
 #
 # Exposes:
 #   sensor.{pid_id}_result         - PID output value
@@ -27,8 +27,8 @@
 #     sensors: !include
 #       file: packages/components/pid_sensors.yaml
 #       vars:
-#         pid_id: "pid_radiant_living_room"
-#         pid_name: "PID Radiant Living Room"
+#         pid_id: "living_room_radiant_pid"
+#         pid_name: "Living Room Radiant PID"
 # =============================================================================
 
 sensor:

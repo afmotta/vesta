@@ -4,8 +4,8 @@
 #            automatic diagnostic sensor creation
 #
 # Required vars:
-#   circuit_slug             - Circuit identifier for entity IDs (e.g., "radiant_living_room")
-#   circuit_name             - Human-readable circuit name (e.g., "Radiant Living Room")
+#   circuit_slug             - Circuit identifier for entity IDs (e.g., "living_room_radiant")
+#   circuit_name             - Human-readable circuit name (e.g., "Living Room Radiant")
 #   sensor                   - Temperature sensor ID (e.g., sensor.living_room_temp)
 #   kp                       - Proportional gain (e.g., 0.8 for radiant, 0.2 for fancoil)
 #   ki                       - Integral gain (e.g., 0.005 for radiant, 0.01 for fancoil)
@@ -21,20 +21,20 @@
 #   - pid_sensors.yaml (included automatically, must be in same directory)
 #
 # Exposes:
-#   climate.pid_{circuit_slug}               - PID climate entity
-#   sensor.pid_{circuit_slug}_result         - PID output value (via pid_sensors)
-#   sensor.pid_{circuit_slug}_error          - PID error signal (via pid_sensors)
-#   sensor.pid_{circuit_slug}_heat           - Heat output 0-1 (via pid_sensors)
-#   sensor.pid_{circuit_slug}_cool           - Cool output 0-1 (via pid_sensors)
-#   binary_sensor.pid_{circuit_slug}_is_active  - Whether PID is actively controlling
+#   climate.{circuit_slug}_pid               - PID climate entity
+#   sensor.{circuit_slug}_pid_result         - PID output value (via pid_sensors)
+#   sensor.{circuit_slug}_pid_error          - PID error signal (via pid_sensors)
+#   sensor.{circuit_slug}_pid_heat           - Heat output 0-1 (via pid_sensors)
+#   sensor.{circuit_slug}_pid_cool           - Cool output 0-1 (via pid_sensors)
+#   binary_sensor.{circuit_slug}_pid_is_active  - Whether PID is actively controlling
 #
 # Example:
 #   packages:
 #     pid: !include
 #       file: packages/components/pid.yaml
 #       vars:
-#         circuit_slug: "radiant_living_room"
-#         circuit_name: "Radiant Living Room"
+#         circuit_slug: "living_room_radiant"
+#         circuit_name: "Living Room Radiant"
 #         sensor: sensor.living_room_temp
 #         kp: 0.8
 #         ki: 0.005
@@ -51,13 +51,13 @@ packages:
   pid_sensors: !include
     file: pid_sensors.yaml
     vars:
-      pid_id: pid_${circuit_slug}
-      pid_name: "PID ${circuit_name}"
+      pid_id: ${circuit_slug}_pid
+      pid_name: "${circuit_name} PID"
 
 climate:
   - platform: pid
-    id: pid_${circuit_slug}
-    name: "PID ${circuit_name}"
+    id: ${circuit_slug}_pid
+    name: "${circuit_name} PID"
     sensor: ${sensor}
     default_target_temperature: ${default_target_temperature}
     control_parameters:
