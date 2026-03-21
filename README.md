@@ -34,7 +34,6 @@ Deactivation requires ALL conditions to clear (AND logic), with anti-oscillation
 | **Trend Sensor** | Rate-of-change calculator with sliding window averaging | [docs/trend-sensor.md](docs/trend-sensor.md) |
 | **Failover Sensor** | 3-tier sensor failover with automatic recovery | [docs/failover-sensor.md](docs/failover-sensor.md) |
 | **Proportional Demand Sensor** | Converts sensor readings to 0-100% demand signals | [docs/proportional-demand.md](docs/proportional-demand.md) |
-| **Dew Point Sensor** | Magnus formula dew point from humidity + temperature | [docs/dew-point-sensor.md](docs/dew-point-sensor.md) |
 
 ### Zone Components (PID Control)
 
@@ -76,7 +75,6 @@ packages/
 │   ├── trend_sensor.yaml                # Rate-of-change with smoothing
 │   ├── failover_sensor.yaml             # Multi-tier sensor failover
 │   ├── proportional_demand_sensor.yaml  # Sensor → demand % mapping
-│   ├── dew_point_sensor.yaml            # Dew point calculation
 │   ├── pid.yaml                         # PID controller wrapper
 │   ├── pid_sensors.yaml                 # PID diagnostic sensors
 │   ├── pid_autotune.yaml                # PID autotune button
@@ -104,7 +102,7 @@ packages/
 
 ### Prerequisites
 
-- **ESPHome** 2025.12.0 or later
+- **ESPHome** 2026.3.0 or later
 - **ESP32** board (ESP-IDF or Arduino framework)
 - **Home Assistant** (optional but recommended for monitoring)
 

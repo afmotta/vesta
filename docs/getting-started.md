@@ -4,7 +4,7 @@ How to start using Vesta components in your ESPHome configuration.
 
 ## Prerequisites
 
-- **ESPHome** 2025.12.0 or later
+- **ESPHome** 2026.3.0 or later
 - **ESP32** board (ESP-IDF or Arduino framework)
 - **Home Assistant** (optional, recommended for tuning parameters and monitoring)
 
