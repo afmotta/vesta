@@ -1,27 +1,54 @@
 # Vesta Climate Framework
 
-**Production-proven ESPHome packages for multi-zone HVAC orchestration.**
-
-Vesta (Roman goddess of the hearth) is a collection of reusable ESPHome YAML packages. 
-
-These components solve real problems that multi-zone HVAC integrators face: sensor failover, proportional demand control, and multi-subsystem coordination.
+**Production-proven ESPHome packages for multi-zone HVAC systems that run without the cloud, without Home Assistant, and without crossing your fingers.**
 
 ---
 
-## The Base + Boost Innovation
+## The Problem
 
-Vesta's flagship pattern treats radiant floor and fancoil systems as **complementary layers** rather than either/or alternatives:
+Building a multi-zone climate control system on ESPHome is surprisingly hard. The basic tutorials get you a thermostat. But a real building — multiple floors, radiant floors, fancoils, ventilation, seasonal switching — hits problems that no tutorial covers:
 
-- **Base Layer** (Radiant Floor): Efficient, comfortable baseline heating/cooling via PID control
-- **Boost Layer** (Fancoil): Responsive capacity supplement that activates automatically when needed
+- **What happens when your temperature sensor dies mid-winter?** Your PID goes blind and your pipes could freeze.
+- **What happens when Home Assistant restarts?** Every automation stops. Your house drifts.
+- **How do you coordinate radiant floors and fancoils?** They fight each other without orchestration.
+- **How do you handle shoulder seasons?** Manual switching between heat and cool is fragile and forgettable.
+- **How do you scale from 1 zone to 13?** Copy-paste YAML breaks at scale.
 
-The Fancoil Boost Coordinator uses three activation triggers:
+These aren't hypothetical. They're problems we hit running a 13-zone, 3-floor residential HVAC system in Milan. Vesta is the framework we built to solve them.
 
-1. **Reactive (Temperature)** - Temperature delta exceeds threshold
-2. **Reactive (Humidity)** - Humidity exceeds threshold with hysteresis dead band
-3. **Predictive (PID Saturation)** - PID output saturated with no temperature improvement
+---
 
-Deactivation requires ALL conditions to clear (AND logic), with anti-oscillation protection via minimum time-in-state. This pattern is not documented elsewhere in the ESPHome ecosystem.
+## What Vesta Gives You
+
+### Autonomy That Survives Failures
+
+Every Vesta component runs on the ESP32. No cloud. No Home Assistant dependency. No network required for core operation.
+
+- **Sensor failover**: If your primary sensor dies, Vesta switches to a backup automatically — and switches back when it recovers
+- **Edge-first control**: PID loops, boost coordination, ventilation state machines all run locally
+- **HA-enhanced, not HA-dependent**: Home Assistant adds dashboards and tuning knobs, but the house stays comfortable without it
+
+### Composable Building Blocks
+
+Vesta isn't a monolithic system. It's a library of packages you compose together:
+
+- Start with a **single PID zone** for one room
+- Add **sensor failover** for reliability
+- Add a **fancoil boost coordinator** when radiant alone isn't enough
+- Add **seasonal mode** to automate heat/cool switching
+- Add **ventilation control** driven by CO₂ and humidity
+- Scale to as many zones as your building needs
+
+Each package declares its inputs as variables. Wire them together with ESPHome's standard `!include` and `vars`. No custom components, no C++ required — just YAML.
+
+### Production-Proven Patterns
+
+Every component in Vesta has run in production on real HVAC hardware controlling a real building. The patterns are proven through seasons of operation:
+
+- **PID tuning** that works for both slow radiant floors and fast fancoils
+- **Anti-oscillation** logic that prevents equipment short-cycling
+- **Graceful degradation** at every level — from sensor failover to emergency shutdown
+- **Demand-based control** that only runs equipment when actually needed
 
 ---
 
@@ -29,72 +56,43 @@ Deactivation requires ALL conditions to clear (AND logic), with anti-oscillation
 
 ### Utility Components
 
-| Component | Description | Docs |
-|-----------|-------------|------|
-| **Trend Sensor** | Rate-of-change calculator with sliding window averaging | [docs/trend-sensor.md](docs/trend-sensor.md) |
-| **Failover Sensor** | 3-tier sensor failover with automatic recovery | [docs/failover-sensor.md](docs/failover-sensor.md) |
-| **Proportional Demand Sensor** | Converts sensor readings to 0-100% demand signals | [docs/proportional-demand.md](docs/proportional-demand.md) |
+| Component | What It Solves |
+| --------- | -------------- |
+| [**Failover Sensor**](docs/failover-sensor.md) | Automatic switchover between primary and backup sensors with recovery |
+| [**Trend Sensor**](docs/trend-sensor.md) | Rate-of-change calculation for predictive control decisions |
+| [**Proportional Demand Sensor**](docs/proportional-demand.md) | Converts raw readings (CO₂, humidity, IAQ) into 0-100% demand signals |
 
-### Zone Components (PID Control)
+### Zone Control
 
-| Component | Description | Docs |
-|-----------|-------------|------|
-| **PID Controller** | Production-tested PID wrapper with diagnostic sensors | [docs/pid.md](docs/pid.md) |
-| **PID Autotune** | Automated PID gain discovery (basic + fancoil-safe variants) | [docs/pid-autotune.md](docs/pid-autotune.md) |
-| **Heat-Only Radiant** | Heat-only radiant zone with slow PWM and manual override | [docs/heat-only-radiant.md](docs/heat-only-radiant.md) |
-| **Radiant** | Dual heat+cool radiant floor zone | [docs/radiant.md](docs/radiant.md) |
-| **Fancoil** | Fancoil unit with PID control for 0-10V analog output | [docs/fancoil.md](docs/fancoil.md) |
+| Component | What It Solves |
+| --------- | -------------- |
+| [**PID Controller**](docs/pid.md) | Production-wrapped PID with diagnostic sensors and safe defaults |
+| [**PID Autotune**](docs/pid-autotune.md) | Automated gain discovery (basic + fancoil-safe variants) |
+| [**Radiant**](docs/radiant.md) | Dual heat+cool radiant floor zone with slow PWM and override |
+| [**Heat-Only Radiant**](docs/heat-only-radiant.md) | Simplified radiant zone for heating-only areas |
+| [**Fancoil**](docs/fancoil.md) | Fancoil unit with PID control and 0-10V analog output |
 
-### Pump Components
+### Pumps & Valves
 
-| Component | Description | Docs |
-|-----------|-------------|------|
-| **Direct Pump** | Simple on/off pump from binary trigger | [docs/direct-pump.md](docs/direct-pump.md) |
-| **Mixing Pump** | Mixing valve + pump with PID and Dallas sensor | [docs/mixing-pump.md](docs/mixing-pump.md) |
+| Component | What It Solves |
+| --------- | -------------- |
+| [**Direct Pump**](docs/direct-pump.md) | On/off pump driven by zone demand |
+| [**Mixing Pump**](docs/mixing-pump.md) | Mixing valve + circulation pump with PID and supply temp sensor |
 
 ### Coordinators
 
-| Component | Description | Docs |
-|-----------|-------------|------|
-| **Seasonal Mode** | Three-tier calendar + demand seasonal mode coordinator | [docs/seasonal-mode.md](docs/seasonal-mode.md) |
-| **Fancoil Boost** | Base + Boost pattern for radiant + fancoil hybrid control | [docs/fancoil-boost.md](docs/fancoil-boost.md) |
-| **MEV Ventilation** | Multi-demand ventilation with humidity state machine | [docs/mev-ventilation.md](docs/mev-ventilation.md) |
+| Component | What It Solves |
+| --------- | -------------- |
+| [**Fancoil Boost**](docs/fancoil-boost.md) | Orchestrates radiant + fancoil as complementary layers (Base + Boost) |
+| [**Seasonal Mode**](docs/seasonal-mode.md) | Automates heat/cool switching with calendar gates + PID demand |
+| [**MEV Ventilation**](docs/mev-ventilation.md) | Multi-demand ventilation with humidity cascade state machine |
 
 ### Device Drivers
 
-| Component | Description | Docs |
-|-----------|-------------|------|
-| **Modbus Relay Board** | 8-relay Modbus expansion board driver | [docs/modbus-relay-board.md](docs/modbus-relay-board.md) |
-| **Modbus Analog Board** | 8-channel 0-10V Modbus analog output driver | [docs/modbus-analog-board.md](docs/modbus-analog-board.md) |
-
-### Package Structure
-
-```
-packages/
-├── components/                          # Standalone reusable components
-│   ├── trend_sensor.yaml                # Rate-of-change with smoothing
-│   ├── failover_sensor.yaml             # Multi-tier sensor failover
-│   ├── proportional_demand_sensor.yaml  # Sensor → demand % mapping
-│   ├── pid.yaml                         # PID controller wrapper
-│   ├── pid_sensors.yaml                 # PID diagnostic sensors
-│   ├── pid_autotune.yaml                # PID autotune button
-│   ├── pid_autotune_with_fancoil.yaml   # Safe autotune variant
-│   ├── heat_only_radiant.yaml           # Heat-only radiant zone
-│   ├── radiant.yaml                     # Dual heat+cool radiant zone
-│   ├── fancoil.yaml                     # Fancoil unit zone
-│   ├── direct_pump.yaml                 # Simple pump control
-│   └── mixing_pump.yaml                 # Mixing valve + pump with PID
-├── coordinators/                        # Multi-component orchestration
-│   ├── seasonal_mode.yaml               # Calendar + demand mode selection
-│   ├── fancoil_boost.yaml               # Radiant + fancoil hybrid control
-│   └── mev_ventilation.yaml             # Multi-demand ventilation
-└── devices/                             # Hardware device drivers
-    └── modbus-io/                       # Modbus I/O board drivers
-        ├── modbus_relay_board.yaml      # 8-relay board aggregator
-        ├── modbus_relay_switch.yaml     # Individual relay switch
-        ├── modbus_analog_outputs_board.yaml  # 8-channel analog board
-        └── modbus_analog_output.yaml    # Individual analog output
-```
+| Component | What It Solves |
+| --------- | -------------- |
+| [**Modbus Relay Board**](docs/modbus-relay-board.md) | 8-relay Modbus expansion board (e.g., Kincony KC868) |
+| [**Modbus Analog Board**](docs/modbus-analog-board.md) | 8-channel 0-10V Modbus analog output board |
 
 ---
 
@@ -104,63 +102,69 @@ packages/
 
 - **ESPHome** 2026.3.0 or later
 - **ESP32** board (ESP-IDF or Arduino framework)
-- **Home Assistant** (optional but recommended for monitoring)
+- **Home Assistant** (optional — for monitoring, dashboards, and tuning)
 
-### Local Include
+No custom components or external libraries required. Vesta uses only standard ESPHome YAML features.
+
+### Add a Component
 
 ```yaml
+# Local include
 packages:
-  trend: !include
-    file: vesta/packages/components/trend_sensor.yaml
+  room_failover: !include
+    file: vesta/packages/components/failover_sensor.yaml
     vars:
-      sensor_id: "my_trend"
-      source_sensor: sensor.room_temperature
-      unit_of_measurement: "°C/min"
+      sensor_id: "living_room_temp"
+      sensor_name: "Living Room Temperature"
+      unit_of_measurement: "°C"
+      device_class: "temperature"
+      primary_sensor: ha_living_room_temp
+      secondary_sensor: local_living_room_temp
 ```
 
-### GitHub Remote Include
-
 ```yaml
+# Or from GitHub
 packages:
-  trend:
+  room_failover:
     url: github://your-username/vesta-climate-framework
-    file: packages/components/trend_sensor.yaml
+    file: packages/components/failover_sensor.yaml
     vars:
-      sensor_id: "my_trend"
-      source_sensor: sensor.room_temperature
-      unit_of_measurement: "°C/min"
+      sensor_id: "living_room_temp"
+      sensor_name: "Living Room Temperature"
+      unit_of_measurement: "°C"
+      device_class: "temperature"
+      primary_sensor: ha_living_room_temp
+      secondary_sensor: local_living_room_temp
 ```
 
-Each component documents its required and optional variables in a header comment block. See individual component docs for full parameter references.
+Every component documents its required and optional variables in a header comment block. Components include their dependencies automatically.
 
 ---
 
-## Architecture Philosophy
+## Architecture Principles
 
 Vesta is built on principles refined through production operation:
 
-1. **HA-Enhanced, Not HA-Dependent** - Components work autonomously; Home Assistant adds monitoring and overrides
-2. **Logic Lives on the Edge** - Climate decisions run on ESP32 devices, not in the cloud or HA
-3. **Minimal Zone Contract** - Each zone needs only a temperature sensor, a setpoint, and an output
-4. **Match Thermal Inertia to Disturbance Patterns** - Slow systems (radiant) handle slow changes; fast systems (fancoil) handle fast changes
-5. **Heterogeneous Subsystem Support** - Mix radiant floors, fancoils, ventilation, and other systems within one framework
+1. **Autonomous Core** — If HA dies, the network drops, the cloud disappears, the house stays comfortable
+2. **Logic Lives on the Edge** — Control decisions run on ESP32 devices, not in HA automations
+3. **HA-Enhanced, Not HA-Dependent** — HA adds visibility and convenience, not reliability
+4. **Minimal Zone Contract** — Each zone needs only a mode, a setpoint, a sensor, and an output
+5. **Match Thermal Inertia to Disturbance Patterns** — Slow systems handle slow changes; fast systems handle fast changes
+6. **Heterogeneous Subsystem Support** — Mix radiant, fancoil, ventilation, and other systems freely
 
-See [docs/principles.md](docs/principles.md) for the complete set of foundational principles.
+See [docs/principles.md](docs/principles.md) for the complete set with examples.
 
 ---
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) - Installation, first steps, and component reference
-- [Principles](docs/principles.md) - Foundational design principles
-- [PID Controller](docs/pid.md) - PID wrapper with diagnostic sensors
-- [Seasonal Mode](docs/seasonal-mode.md) - Three-tier automatic mode selection
-- [Two-Zone Radiant + Fancoil](examples/two_zone_radiant_fancoil.yaml) - Boost coordination for hybrid zones
-- [MEV Two-Demand Ventilation](examples/mev_two_demand.yaml) - Proportional ventilation driven by humidity + CO2
-- [Contributing](CONTRIBUTING.md) - How to contribute components and improvements
+- [**Getting Started**](docs/getting-started.md) — Installation, first component, and learning path
+- [**Principles**](docs/principles.md) — The design philosophy behind every component
+- [**Examples**](examples/) — Complete working configurations you can adapt
+- [**Contributing**](CONTRIBUTING.md) — How to contribute components and improvements
 
 ---
 
 ## License
 
-[MIT](LICENSE) - Use freely in personal and commercial projects.
+[MIT](LICENSE) — Use freely in personal and commercial projects.
