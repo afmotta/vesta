@@ -121,6 +121,23 @@ sensor:
     entity_id: input_number.predictive_boost_minutes
     internal: true
 
+  # ---------------------------------------------------------------------------
+  # PID output sensors (required by boost coordinator)
+  # ---------------------------------------------------------------------------
+  # These sensors expose the PID cool output (0-1 range) so the boost
+  # coordinator can detect saturation. The PID climates are defined below.
+  - platform: pid
+    climate_id: pid_radiant_living_room
+    id: pid_radiant_living_room_cool
+    type: COOL
+    internal: true
+
+  - platform: pid
+    climate_id: pid_radiant_kitchen
+    id: pid_radiant_kitchen_cool
+    type: COOL
+    internal: true
+
 # ---------------------------------------------------------------------------
 # Season mode sensor
 # ---------------------------------------------------------------------------
@@ -204,24 +221,6 @@ climate:
       kd: 0.08
 
 # ---------------------------------------------------------------------------
-# PID output sensors (required by boost coordinator)
-# ---------------------------------------------------------------------------
-# These template sensors expose the PID cool output (0-1 range) so the
-# boost coordinator can detect saturation.
-sensor:
-  - platform: pid
-    climate_id: pid_radiant_living_room
-    id: pid_radiant_living_room_cool
-    type: COOL
-    internal: true
-
-  - platform: pid
-    climate_id: pid_radiant_kitchen
-    id: pid_radiant_kitchen_cool
-    type: COOL
-    internal: true
-
-# ---------------------------------------------------------------------------
 # Radiant override entities (required by boost coordinator)
 # ---------------------------------------------------------------------------
 # The boost coordinator uses these to lock radiant output at 100% during boost.
@@ -270,7 +269,7 @@ packages:
 
   # Failover sensors: HA (primary) → local (secondary) → Emergency (NAN)
   living_room_temp_failover: !include
-    file: packages/components/failover_sensor.yaml
+    file: ../packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_temp"
       sensor_name: "Living Room Temperature"
@@ -280,7 +279,7 @@ packages:
       secondary_sensor: local_living_room_temp
 
   living_room_humidity_failover: !include
-    file: packages/components/failover_sensor.yaml
+    file: ../packages/components/failover_sensor.yaml
     vars:
       sensor_id: "living_room_humidity"
       sensor_name: "Living Room Humidity"
@@ -293,7 +292,7 @@ packages:
   # Monitors radiant PID output + temperature + humidity to decide
   # when fancoil boost is needed.
   living_room_boost: !include
-    file: packages/coordinators/fancoil_boost.yaml
+    file: ../packages/coordinators/fancoil_boost.yaml
     vars:
       zone_slug: "living_room"
       zone_name: "Living Room"
@@ -315,7 +314,7 @@ packages:
   # =========================================================================
 
   kitchen_temp_failover: !include
-    file: packages/components/failover_sensor.yaml
+    file: ../packages/components/failover_sensor.yaml
     vars:
       sensor_id: "kitchen_temp"
       sensor_name: "Kitchen Temperature"
@@ -325,7 +324,7 @@ packages:
       secondary_sensor: local_kitchen_temp
 
   kitchen_humidity_failover: !include
-    file: packages/components/failover_sensor.yaml
+    file: ../packages/components/failover_sensor.yaml
     vars:
       sensor_id: "kitchen_humidity"
       sensor_name: "Kitchen Humidity"
@@ -335,7 +334,7 @@ packages:
       secondary_sensor: local_kitchen_humidity
 
   kitchen_boost: !include
-    file: packages/coordinators/fancoil_boost.yaml
+    file: ../packages/coordinators/fancoil_boost.yaml
     vars:
       zone_slug: "kitchen"
       zone_name: "Kitchen"

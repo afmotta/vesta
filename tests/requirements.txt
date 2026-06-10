@@ -1,0 +1,6 @@
+# Pin esphome deliberately; bumping it in CI doubles as a compatibility test
+# before raising min_version in the packages.
+esphome==2026.5.3
+aioesphomeapi>=32.0.0
+pytest>=8.0
+pytest-asyncio>=0.23
