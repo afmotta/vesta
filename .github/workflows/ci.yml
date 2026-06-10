@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate configs (layer 1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/uv.lock
+      - run: uv sync --project tests --locked
+      - name: Validate test harnesses
+        run: |
+          for f in tests/harness/*.yaml; do
+            uv run --project tests esphome config "$f"
+          done
+      - name: Validate examples
+        run: |
+          printf 'wifi_ssid: testssid\nwifi_password: testpassword\nencryption_key: "%s"\nota_password: testpassword\n' \
+            "$(openssl rand -base64 32)" > examples/secrets.yaml
+          for f in examples/*.yaml; do
+            [ "$(basename "$f")" = "secrets.yaml" ] && continue
+            uv run --project tests esphome config "$f"
+          done
+          rm examples/secrets.yaml
+
+  behavioral:
+    name: Host compile + behavioral tests (layers 2-3)
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/uv.lock
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            tests/harness/.esphome
+          key: host-build-${{ hashFiles('tests/uv.lock') }}-${{ hashFiles('tests/harness/*.yaml', 'packages/**/*.yaml') }}
+          restore-keys: |
+            host-build-${{ hashFiles('tests/uv.lock') }}-
+      - run: uv sync --project tests --locked
+      - run: uv run --project tests pytest tests/e2e/ -v

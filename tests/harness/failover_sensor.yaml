@@ -1,0 +1,67 @@
+# =============================================================================
+# Test harness: failover_sensor
+#
+# Compiles for the `host` platform so the full ESPHome runtime (template
+# sensors, automations, native API) runs as a local Linux binary.
+#
+# Inputs of the package under test are replaced by bare template sensors,
+# which start as NaN (= "failed sensor") and only publish when driven via
+# the API actions below. The pytest driver in tests/e2e/ injects values
+# through those actions and asserts on the package's exposed entities.
+#
+# Used by all three test layers:
+#   esphome config  tests/harness/failover_sensor.yaml   (validate)
+#   esphome compile tests/harness/failover_sensor.yaml   (compile check)
+#   pytest tests/e2e/test_failover_sensor.py             (behavior)
+# =============================================================================
+
+esphome:
+  name: t-failover-sensor
+
+host:
+
+logger:
+  level: DEBUG
+
+api:
+  actions:
+    - action: set_primary
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_primary
+            state: !lambda "return value;"
+    - action: set_secondary
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_secondary
+            state: !lambda "return value;"
+
+# Input stubs: no lambda, no update_interval -> state is NaN until published.
+sensor:
+  - platform: template
+    id: stub_primary
+    internal: true
+  - platform: template
+    id: stub_secondary
+    internal: true
+
+# Package under test, included exactly as a user would include it.
+# update_interval is compressed so tests settle in well under a second.
+packages:
+  dut: !include
+    file: ../../packages/components/failover_sensor.yaml
+    vars:
+      # Note: API object_ids derive from the entity *name*, so keep
+      # sensor_name aligned with the ids asserted in tests/e2e/.
+      sensor_id: "test_temp"
+      sensor_name: "Test Temp"
+      unit_of_measurement: "°C"
+      device_class: "temperature"
+      primary_sensor: stub_primary
+      secondary_sensor: stub_secondary
+      internal: "false"
+      update_interval: "100ms"

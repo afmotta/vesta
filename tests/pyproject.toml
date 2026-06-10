@@ -1,0 +1,17 @@
+[project]
+name = "vesta-tests"
+version = "0.1.0"
+description = "Test suite for the Vesta climate framework packages"
+requires-python = ">=3.11"
+# esphome is pinned deliberately; bumping it (and re-locking) doubles as a
+# compatibility test before raising min_version in the packages.
+dependencies = [
+    "esphome==2026.5.3",
+    "aioesphomeapi>=32.0.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["e2e"]
