@@ -81,8 +81,12 @@ This is the layer that earns trust. The pattern:
 
 ## Repository layout
 
+The test suite is a self-contained [uv](https://docs.astral.sh/uv/) project under `tests/`, keeping the repository root YAML-first. `uv run --project tests pytest tests/e2e/` is the only command a contributor needs — uv provisions the virtualenv with the locked esphome/aioesphomeapi/pytest versions on first run.
+
 ```
 tests/
+  pyproject.toml            # uv project: pinned esphome, aioesphomeapi, pytest
+  uv.lock                   # reproducible resolution, drives CI caching
   harness/                  # one ESPHome config per package (layers 1, 2, 3)
     failover_sensor.yaml
     trend_sensor.yaml
@@ -93,7 +97,6 @@ tests/
     test_failover_sensor.py
     test_fancoil_boost.py
     ...
-  requirements.txt          # esphome, aioesphomeapi, pytest, pytest-asyncio
 .github/workflows/
   ci.yml                    # lint → validate → host compile + e2e
   esp32.yml                 # nightly/tag: esp32 compile of examples + device drivers
@@ -121,21 +124,21 @@ The `fancoil_boost` suite proves the harness pattern scales to the coordinators:
 # ci.yml (every push / PR)
 jobs:
   validate:            # layer 1, ~1 min
-    - pip install esphome==<pinned>
-    - esphome config tests/harness/*.yaml examples/*.yaml
+    - astral-sh/setup-uv (cache keyed on tests/uv.lock)
+    - uv sync --project tests --locked
+    - uv run --project tests esphome config tests/harness/*.yaml examples/*.yaml
   behavioral:          # layers 2+3, ~3-5 min warm
     needs: validate
     - cache: ~/.platformio, tests/harness/.esphome
-    - pip install -r tests/requirements.txt
-    - pytest tests/e2e/   # compiles host binaries as a side effect
+    - uv run --project tests pytest tests/e2e/   # compiles host binaries as a side effect
 
 # esp32.yml (nightly + tags) — layer 2 slow lane
   esp32-compile:
     - cache: ~/.platformio
-    - esphome compile examples/*.yaml tests/harness/esp32/*.yaml
+    - uv run --project tests esphome compile examples/*.yaml tests/harness/esp32/*.yaml
 ```
 
-Pin the ESPHome version in CI and bump it deliberately — a CI run against a new ESPHome release is then a *compatibility test*, which is exactly the signal a packages repo needs before bumping `min_version`.
+The ESPHome version is pinned in `tests/pyproject.toml` and locked in `tests/uv.lock`; bump it deliberately and re-lock — a CI run against a new ESPHome release is then a *compatibility test*, which is exactly the signal a packages repo needs before bumping `min_version`.
 
 ## Small testability refactors (worth doing, all backwards-compatible)
 
