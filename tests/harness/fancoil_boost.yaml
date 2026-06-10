@@ -1,0 +1,184 @@
+# =============================================================================
+# Test harness: fancoil_boost coordinator
+#
+# Runs the full Base + Boost state machine on the host platform with every
+# hardware input stubbed:
+#   - zone/threshold sensors  -> template sensors driven via API actions
+#   - cooling season          -> template binary sensor driven via API action
+#   - radiant/fancoil PIDs    -> real `pid` climates over no-op template outputs
+#   - radiant override        -> optimistic template number + switch
+#
+# Time compression:
+#   - min_time_in_state_seconds: 2   (anti-cycling delay; prod default 600)
+#   - diagnostics_update_interval: 100ms (temp delta poll; prod default 30s)
+#   - condition binary sensors need no compression: template binary sensors
+#     are evaluated every loop() iteration
+#   - predictive delay is runtime-controlled via set_predictive_minutes
+#     (fractional minutes work: 0.05 = 3 s)
+#
+# The radiant PID target temperature is fixed at 24.0 °C, so tests reason in
+# absolute temperatures: 26.0 => delta +2.0, 23.0 => delta -1.0.
+# =============================================================================
+
+esphome:
+  name: t-fancoil-boost
+
+host:
+
+logger:
+  level: DEBUG
+
+api:
+  actions:
+    - action: set_temperature
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_temperature
+            state: !lambda "return value;"
+    - action: set_humidity
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_humidity
+            state: !lambda "return value;"
+    - action: set_radiant_cool_output
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_radiant_cool
+            state: !lambda "return value;"
+    - action: set_temp_threshold
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_temp_threshold
+            state: !lambda "return value;"
+    - action: set_humidity_threshold
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_humidity_threshold
+            state: !lambda "return value;"
+    - action: set_predictive_minutes
+      variables:
+        value: float
+      then:
+        - sensor.template.publish:
+            id: stub_predictive_minutes
+            state: !lambda "return value;"
+    - action: set_cooling_mode
+      variables:
+        value: bool
+      then:
+        - binary_sensor.template.publish:
+            id: stub_cooling_mode
+            state: !lambda "return value;"
+
+# Input stubs: state is NaN/off until a test publishes via the actions above.
+sensor:
+  - platform: template
+    id: stub_temperature
+    internal: true
+  - platform: template
+    id: stub_humidity
+    internal: true
+  - platform: template
+    id: stub_radiant_cool
+    internal: true
+  - platform: template
+    id: stub_temp_threshold
+    internal: true
+  - platform: template
+    id: stub_humidity_threshold
+    internal: true
+  - platform: template
+    id: stub_predictive_minutes
+    internal: true
+
+binary_sensor:
+  - platform: template
+    id: stub_cooling_mode
+    internal: true
+
+# No-op outputs standing in for the radiant slow PWM and the PID outputs.
+output:
+  - platform: template
+    id: stub_radiant_pwm
+    type: float
+    write_action:
+      - lambda: ";"
+  - platform: template
+    id: stub_radiant_pid_out
+    type: float
+    write_action:
+      - lambda: ";"
+  - platform: template
+    id: stub_fancoil_pid_out
+    type: float
+    write_action:
+      - lambda: ";"
+
+# Radiant override entities, mirroring the example configs.
+number:
+  - platform: template
+    id: radiant_override_value
+    name: "Radiant Override Value"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+
+switch:
+  - platform: template
+    id: radiant_override
+    name: "Radiant Override"
+    optimistic: true
+
+# Real PID climates: the coordinator reads radiant target_temperature and
+# drives the fancoil mode via climate.control, so these must be genuine
+# climate entities, not stubs.
+climate:
+  - platform: pid
+    id: radiant_pid
+    name: "Radiant PID"
+    sensor: stub_temperature
+    default_target_temperature: 24.0
+    cool_output: stub_radiant_pid_out
+    control_parameters:
+      kp: 1.0
+  - platform: pid
+    id: fancoil_pid
+    name: "Fancoil PID"
+    sensor: stub_temperature
+    default_target_temperature: 24.0
+    cool_output: stub_fancoil_pid_out
+    control_parameters:
+      kp: 1.0
+
+# Package under test.
+packages:
+  dut: !include
+    file: ../../packages/coordinators/fancoil_boost.yaml
+    vars:
+      zone_slug: "test_zone"
+      zone_name: "Test Zone"
+      temperature_sensor: stub_temperature
+      humidity_sensor: stub_humidity
+      radiant_pid_id: radiant_pid
+      radiant_pid_cool_sensor: stub_radiant_cool
+      fancoil_pid_id: fancoil_pid
+      radiant_override_value_id: radiant_override_value
+      radiant_override_switch_id: radiant_override
+      radiant_pwm_id: stub_radiant_pwm
+      cooling_mode_sensor: stub_cooling_mode
+      temp_threshold_sensor: stub_temp_threshold
+      humidity_threshold_sensor: stub_humidity_threshold
+      predictive_minutes_sensor: stub_predictive_minutes
+      min_time_in_state_seconds: 2
+      diagnostics_update_interval: 100ms

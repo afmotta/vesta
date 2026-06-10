@@ -99,13 +99,21 @@ tests/
   esp32.yml                 # nightly/tag: esp32 compile of examples + device drivers
 ```
 
-A proof of concept for the `failover_sensor` package (harness config + pytest driver + fixture) is included in this branch under `tests/` and has been verified end to end: the harness validates, compiles for the host platform in ~15 s cold (no-op when cached), and the full tier-cascade-and-recovery test passes in ~2 s:
+Proofs of concept for both the simplest package (`failover_sensor`) and the most complex one (`fancoil_boost`) are included in this branch under `tests/` and verified end to end — each harness validates, compiles for the host platform in ~15–25 s cold (no-op when cached), and the behavioral suite passes:
 
 ```
 $ pytest tests/e2e/ -v
 tests/e2e/test_failover_sensor.py::test_failover_tier_cascade_and_recovery PASSED
-============================== 1 passed in 2.27s ===============================
+tests/e2e/test_fancoil_boost.py::test_reactive_temp_activation_locks_radiant_and_enables_fancoil PASSED
+tests/e2e/test_fancoil_boost.py::test_anti_cycling_timer_cancels_when_condition_clears PASSED
+tests/e2e/test_fancoil_boost.py::test_reactive_humidity_activation PASSED
+tests/e2e/test_fancoil_boost.py::test_predictive_activation_on_sustained_saturation PASSED
+tests/e2e/test_fancoil_boost.py::test_deactivation_requires_temp_and_humidity PASSED
+tests/e2e/test_fancoil_boost.py::test_season_change_ends_boost_immediately PASSED
+============================== 7 passed in 43.63s ==============================
 ```
+
+The `fancoil_boost` suite proves the harness pattern scales to the coordinators: it runs real `pid` climates over no-op template outputs, drives season/temperature/humidity/saturation through API actions, and asserts the full state-machine contract — including the anti-short-cycling guarantee (the activation timer cancels when the trigger clears early) and the immediate season-change safety override. The only package change it needed was making the hardcoded 30 s diagnostic `update_interval` an optional var (`diagnostics_update_interval`); the condition binary sensors needed nothing, since template binary sensors are evaluated every loop iteration.
 
 ## CI pipeline (GitHub Actions)
 

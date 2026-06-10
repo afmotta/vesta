@@ -25,6 +25,9 @@
 #   min_time_in_state_seconds    - Anti-cycling minimum (default: 600 = 10 min)
 #   humidity_hysteresis          - Dead band around humidity threshold (default: 5.0)
 #   saturated_output_threshold   - PID output level = "saturated" (default: 0.95)
+#   diagnostics_update_interval  - Poll rate of the temp delta / radiant output
+#                                  diagnostic sensors (default: 30s; tests
+#                                  compress this)
 #
 # Dependencies:
 #   - ../components/trend_sensor.yaml (included automatically)
@@ -86,6 +89,7 @@ defaults:
   min_time_in_state_seconds: 600
   humidity_hysteresis: 5.0
   saturated_output_threshold: 0.95
+  diagnostics_update_interval: 30s
 
 # =============================================================================
 # Boot: sync automation state text sensor with restored select value
@@ -169,7 +173,7 @@ sensor:
       float target = id(${radiant_pid_id}).target_temperature;
       if (std::isnan(current) || std::isnan(target)) return NAN;
       return current - target;
-    update_interval: 30s
+    update_interval: ${diagnostics_update_interval}
 
   - platform: template
     id: ${zone_slug}_radiant_output_pct
@@ -181,7 +185,7 @@ sensor:
       float output = id(${radiant_pid_cool_sensor}).state;
       if (std::isnan(output)) return 0.0;
       return output * 100.0;
-    update_interval: 30s
+    update_interval: ${diagnostics_update_interval}
 
 # =============================================================================
 # Transition scripts (mode: restart = delay timer, cancellable)

@@ -12,6 +12,7 @@ import asyncio
 import math
 import socket
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -102,7 +103,13 @@ async def run_harness():
 
     async def _run(name: str) -> Harness:
         binary = await asyncio.to_thread(_compile, HARNESS_DIR / f"{name}.yaml")
-        proc = subprocess.Popen([str(binary)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Fresh working directory per run: the host platform persists
+        # preferences (e.g. select restore_value) to a file in cwd, and
+        # tests must not inherit state from previous runs.
+        workdir = tempfile.mkdtemp(prefix=f"vesta-e2e-{name}-")
+        proc = subprocess.Popen(
+            [str(binary)], cwd=workdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
         processes.append(proc)
         # Wait for the API server to accept connections.
         async with asyncio.timeout(10):
