@@ -141,6 +141,8 @@ fancoil_boost.yaml (packages/coordinators/)
 | `min_time_in_state_seconds` | int | `600` | Anti-cycling minimum (seconds) |
 | `humidity_hysteresis` | float | `5.0` | Dead band around humidity threshold (% RH) |
 | `saturated_output_threshold` | float | `0.95` | PID output considered "saturated" (0-1) |
+| `boost_active_global` | ID | `{zone_slug}_boost_active` | Global bool id, true while boost is active; read/assigned directly (`id(x)`) by the floor aggregator and the autotune button |
+| `last_mode_change_time_global` | ID | `{zone_slug}_last_mode_change_time` | Global uint32_t id, `millis()` of the last boost/radiant transition |
 
 ## Diagnostic Sensors
 

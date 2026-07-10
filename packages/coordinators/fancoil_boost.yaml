@@ -28,6 +28,11 @@
 #   diagnostics_update_interval  - Poll rate of the temp delta / radiant output
 #                                  diagnostic sensors (default: 30s; tests
 #                                  compress this)
+#   boost_active_global          - Global bool id, true while boost is active
+#                                  (default: ${zone_slug}_boost_active)
+#   last_mode_change_time_global - Global uint32_t id, millis() of the last
+#                                  boost/radiant transition
+#                                  (default: ${zone_slug}_last_mode_change_time)
 #
 # Dependencies:
 #   - ../components/trend_sensor.yaml (included automatically)
@@ -52,6 +57,9 @@
 #   sensor.{zone_slug}_temp_delta                      - Temperature delta from target
 #   sensor.{zone_slug}_radiant_output_pct              - Radiant PID output %
 #   sensor.{zone_slug}_temp_trend                      - Temperature trend (via trend_sensor)
+#   binary_sensor.{zone_slug}_boost_active_sensor      - HA mirror of boost_active_global
+#   global.{boost_active_global}                       - raw bool, for external id(x) use
+#   global.{last_mode_change_time_global}              - raw uint32_t, for external id(x) use
 #
 # Example:
 #   packages:
@@ -90,6 +98,8 @@ defaults:
   humidity_hysteresis: 5.0
   saturated_output_threshold: 0.95
   diagnostics_update_interval: 30s
+  boost_active_global: ${zone_slug}_boost_active
+  last_mode_change_time_global: ${zone_slug}_last_mode_change_time
 
 # =============================================================================
 # Boot: sync automation state text sensor with restored select value
@@ -99,6 +109,20 @@ esphome:
     priority: -100  # Run after all components are initialized
     then:
       - script.execute: ${zone_slug}_boost_update_idle
+
+# =============================================================================
+# Raw globals: for external lambdas/scripts to read or assign directly via
+# id(x) - not entities. Kept separate from the select's own state so callers
+# outside this coordinator (e.g. an autotune routine forcing boost off) don't
+# need an entity round-trip.
+# =============================================================================
+globals:
+  - id: ${boost_active_global}
+    type: bool
+    initial_value: 'false'
+  - id: ${last_mode_change_time_global}
+    type: uint32_t
+    initial_value: '0'
 
 # =============================================================================
 # State: select controls boost mode, set_action drives hardware outputs
@@ -131,6 +155,15 @@ select:
             - climate.control:
                 id: ${fancoil_pid_id}
                 mode: COOL
+            - globals.set:
+                id: ${boost_active_global}
+                value: 'true'
+            - globals.set:
+                id: ${last_mode_change_time_global}
+                value: millis()
+            - binary_sensor.template.publish:
+                id: ${zone_slug}_boost_active_sensor
+                state: true
             - logger.log:
                 format: "${zone_slug}: BOOST ACTIVATED - Radiant locked 100%%, Fancoil COOL"
                 level: INFO
@@ -145,6 +178,15 @@ select:
             - climate.control:
                 id: ${fancoil_pid_id}
                 mode: "OFF"
+            - globals.set:
+                id: ${boost_active_global}
+                value: 'false'
+            - globals.set:
+                id: ${last_mode_change_time_global}
+                value: millis()
+            - binary_sensor.template.publish:
+                id: ${zone_slug}_boost_active_sensor
+                state: false
             - logger.log:
                 format: "${zone_slug}: NORMAL MODE - Radiant unlocked (PID resumed), Fancoil OFF"
                 level: INFO
@@ -239,17 +281,25 @@ script:
           level: INFO
           tag: boost
 
-  # Update idle display state when conditions clear
+  # Update idle display state when conditions clear. Also runs on_boot
+  # (priority -100, see esphome.on_boot above) to resync boost_active_global
+  # and the HA-visible binary_sensor with whatever option the select restored
+  # from flash - set_action only fires on an actual select.set call, which
+  # restore_value's boot-time publish_state does not trigger. This resyncs
+  # reported state only: last_mode_change_time_global intentionally stays at
+  # its initial 0 across a reboot (no RTC - see ADR-0014 §5 - so "time since
+  # boot" is the best available approximation), and the physical outputs
+  # (radiant override, PWM, fancoil mode) are NOT replayed here - restoring
+  # those on boot is a pre-existing gap in this coordinator, not something
+  # introduced by wiring the two globals.
   - id: ${zone_slug}_boost_update_idle
     mode: restart
     then:
       - lambda: |-
-          auto state = id(${zone_slug}_boost_state).current_option();
-          if (state == "Radiant Only") {
-            id(${zone_slug}_boost_automation_state).publish_state("Idle");
-          } else {
-            id(${zone_slug}_boost_automation_state).publish_state("Boost Active");
-          }
+          bool boosting = id(${zone_slug}_boost_state).current_option() != "Radiant Only";
+          id(${zone_slug}_boost_automation_state).publish_state(boosting ? "Boost Active" : "Idle");
+          id(${boost_active_global}) = boosting;
+          id(${zone_slug}_boost_active_sensor).publish_state(boosting);
 
 # =============================================================================
 # Condition binary sensors (event-driven transitions)
@@ -257,6 +307,16 @@ script:
 # on_release → cancel timer, update idle state
 # =============================================================================
 binary_sensor:
+  # HA-visible mirror of boost_active_global - push-published from set_action
+  # and the on_boot resync, never polled (mirrors fallback_events_sensor's
+  # push-publish pattern)
+  - platform: template
+    name: "${zone_name} Boost Active"
+    id: ${zone_slug}_boost_active_sensor
+    icon: mdi:fan-auto
+    device_class: running
+    entity_category: diagnostic
+
   # Reactive: temperature too high for radiant alone
   - platform: template
     name: "${zone_name} Should Boost (Temp)"
