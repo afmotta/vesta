@@ -1,0 +1,273 @@
+# =============================================================================
+# Device Driver: modbus_relay_board_32ch.yaml
+# Purpose:       Manage a 32-relay Modbus expansion board (Waveshare Modbus
+#                RTU Relay 32CH). Creates the modbus_controller and includes
+#                32 relay switch instances. Drop-in sibling of
+#                modbus_relay_board.yaml (8-ch) at 4x the channel count.
+#
+# No connectivity status sensor: unlike the 8-ch board (which polls an
+# independent holding/input register via register_type: read), this board
+# has no documented register outside its 32 relay coils. Polling any of them
+# for "connectivity" would just alias that relay's own on/off state (e.g.
+# coil 0x0000 == relay_1's coil) under a misleading device_class: connectivity
+# label. Communication failures still surface per-switch — ESPHome's
+# modbus_controller marks a switch unavailable on read timeout — so this is
+# a deliberate omission, not a gap.
+#
+# Required vars:
+#   controller_id            - Unique ID for this modbus_controller
+#   modbus_address            - Modbus slave address (e.g., 0x02)
+#   modbus_bus_id             - ID of the modbus bus (e.g., "rs485_bus")
+#
+# Optional vars:
+#   controller_name           - Accepted for interface parity with
+#                                modbus_relay_board.yaml (drop-in sibling); this
+#                                board has no status sensor to name, so the
+#                                value is currently accepted but unused. Safe
+#                                to omit.
+#   update_interval           - Polling interval (default: 5s). Unchanged from
+#                                the 8-ch board's default; not re-validated for
+#                                32 coils' worth of polling traffic per cycle.
+#   id_offset                 - Offset for relay IDs to avoid collisions across
+#                                multiple boards (default: 0). E.g., board 2 uses
+#                                id_offset: 32 so relays are numbered 33-64
+#                                (this board consumes 32 ids per instance, not
+#                                8 — stagger accordingly when mixing with the
+#                                8-ch board or another 32-ch board).
+#                                Negative offsets are supported (verified via
+#                                `esphome config`, 2026-07-10): id_offset: -1
+#                                yields relay_0..relay_31 for a 0-based consumer.
+#                                Only id_offset: 0 is exercised by the committed
+#                                compile-checked example; the negative-offset
+#                                finding above has no persisted regression
+#                                check in this repo. No lower-bound guard and
+#                                no type check: id_offset below -1, or a
+#                                non-integer value, produces an invalid entity
+#                                id (e.g. relay_-1) with no compile-time error.
+#                                Must be passed as a numeric var (not a string
+#                                substitution) — ESPHome's jinja arithmetic
+#                                rejects string + int. No lower-bound guard:
+#                                id_offset below -1 produces an invalid entity
+#                                id (e.g. relay_-1) — caller's responsibility.
+#
+# Dependencies:
+#   - modbus_relay_switch.yaml (included automatically, must be in same directory)
+#
+# Exposes:
+#   switch.relay_{1+id_offset} through switch.relay_{32+id_offset} - 32 relay controls
+#
+# Example:
+#   packages:
+#     relays: !include
+#       file: packages/devices/modbus-io/modbus_relay_board_32ch.yaml
+#       vars:
+#         controller_id: relay_board_1
+#         controller_name: "Relay Board 1"
+#         modbus_address: 0x02
+#         modbus_bus_id: rs485_bus
+#         id_offset: 0
+# =============================================================================
+
+defaults:
+  update_interval: 5s
+  id_offset: 0
+
+modbus_controller:
+  - id: ${controller_id}
+    address: ${modbus_address}
+    modbus_id: ${modbus_bus_id}
+    update_interval: ${update_interval}
+
+packages:
+  relay_1: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${1 + id_offset}
+      register_address: 0x0000
+  relay_2: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${2 + id_offset}
+      register_address: 0x0001
+  relay_3: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${3 + id_offset}
+      register_address: 0x0002
+  relay_4: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${4 + id_offset}
+      register_address: 0x0003
+  relay_5: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${5 + id_offset}
+      register_address: 0x0004
+  relay_6: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${6 + id_offset}
+      register_address: 0x0005
+  relay_7: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${7 + id_offset}
+      register_address: 0x0006
+  relay_8: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${8 + id_offset}
+      register_address: 0x0007
+  relay_9: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${9 + id_offset}
+      register_address: 0x0008
+  relay_10: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${10 + id_offset}
+      register_address: 0x0009
+  relay_11: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${11 + id_offset}
+      register_address: 0x000A
+  relay_12: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${12 + id_offset}
+      register_address: 0x000B
+  relay_13: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${13 + id_offset}
+      register_address: 0x000C
+  relay_14: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${14 + id_offset}
+      register_address: 0x000D
+  relay_15: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${15 + id_offset}
+      register_address: 0x000E
+  relay_16: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${16 + id_offset}
+      register_address: 0x000F
+  relay_17: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${17 + id_offset}
+      register_address: 0x0010
+  relay_18: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${18 + id_offset}
+      register_address: 0x0011
+  relay_19: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${19 + id_offset}
+      register_address: 0x0012
+  relay_20: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${20 + id_offset}
+      register_address: 0x0013
+  relay_21: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${21 + id_offset}
+      register_address: 0x0014
+  relay_22: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${22 + id_offset}
+      register_address: 0x0015
+  relay_23: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${23 + id_offset}
+      register_address: 0x0016
+  relay_24: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${24 + id_offset}
+      register_address: 0x0017
+  relay_25: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${25 + id_offset}
+      register_address: 0x0018
+  relay_26: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${26 + id_offset}
+      register_address: 0x0019
+  relay_27: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${27 + id_offset}
+      register_address: 0x001A
+  relay_28: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${28 + id_offset}
+      register_address: 0x001B
+  relay_29: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${29 + id_offset}
+      register_address: 0x001C
+  relay_30: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${30 + id_offset}
+      register_address: 0x001D
+  relay_31: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${31 + id_offset}
+      register_address: 0x001E
+  relay_32: !include
+    file: modbus_relay_switch.yaml
+    vars:
+      controller_id: ${controller_id}
+      switch_number: ${32 + id_offset}
+      register_address: 0x001F

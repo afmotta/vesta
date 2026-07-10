@@ -1,0 +1,75 @@
+# =============================================================================
+# Example: 32-Channel Modbus Relay Board (Waveshare Modbus RTU Relay 32CH)
+#
+# This example demonstrates wiring the Vesta 32-channel relay board driver
+# to an RS485/Modbus bus and exposing all 32 relays. Unlike the 8-channel
+# board, this package has no connectivity status sensor — see the package's
+# header comment for why (no independent status register on this board).
+#
+# Hardware assumed:
+#   - ESP32 board with a UART wired to an RS485 transceiver
+#   - Waveshare Modbus RTU Relay 32CH board at address 0x02
+#
+# This is a REFERENCE EXAMPLE - adapt hardware definitions, UART pins, and
+# bus parameters to match your actual installation.
+# =============================================================================
+
+esphome:
+  name: relay-32ch-controller
+  friendly_name: "Relay 32CH Controller"
+
+esp32:
+  board: esp32dev
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+  level: INFO
+
+# ---------------------------------------------------------------------------
+# RS485 / Modbus bus (replace pins/baud with your actual wiring)
+# ---------------------------------------------------------------------------
+uart:
+  - id: modbus_uart
+    tx_pin: GPIO17
+    rx_pin: GPIO18
+    baud_rate: 38400
+    stop_bits: 1
+    data_bits: 8
+    parity: EVEN
+
+modbus:
+  id: rs485_bus
+  uart_id: modbus_uart
+
+# =============================================================================
+# VESTA PACKAGES
+# =============================================================================
+
+packages:
+  relays: !include
+    file: ../packages/devices/modbus-io/modbus_relay_board_32ch.yaml
+    vars:
+      controller_id: relay_board_1
+      controller_name: "Relay Board 1"
+      modbus_address: 0x02
+      modbus_bus_id: rs485_bus
+      id_offset: 0
+
+# =============================================================================
+# What you get from this configuration:
+# =============================================================================
+#
+#   switch.relay_1 through switch.relay_32 - Individual relay controls
+#   (no connectivity status sensor - see package header comment)
+# =============================================================================
