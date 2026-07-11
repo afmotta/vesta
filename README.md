@@ -91,7 +91,7 @@ Every component in Vesta has run in production on real HVAC hardware controlling
 
 | Component | What It Solves |
 | --------- | -------------- |
-| [**Modbus Relay Board**](docs/modbus-relay-board.md) | 8-relay Modbus expansion board (e.g., Kincony KC868) |
+| [**Modbus Relay Board**](docs/modbus-relay-board.md) | Generic Modbus RTU relay boards (8-channel base driver, 32-channel aggregator) |
 | [**Modbus Analog Board**](docs/modbus-analog-board.md) | 8-channel 0-10V Modbus analog output board |
 
 ---
