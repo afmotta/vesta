@@ -64,6 +64,9 @@ Recovery is automatic and immediate:
 | `internal`            | bool   | No       | `true`  | If `true`, hides the value sensor from HA (tier sensor always visible) |
 | `accuracy_decimals`   | int    | No       | `1`     | Decimal precision for displayed value                                  |
 | `update_interval`     | string | No       | `10s`   | How often to evaluate failover logic                                   |
+| `primary_tier_label`   | string | No      | `Primary`   | User-facing name for tier 1, shown in the tier text sensor and logs |
+| `secondary_tier_label` | string | No      | `Secondary` | User-facing name for tier 2, shown in the tier text sensor and logs |
+| `emergency_tier_label` | string | No      | `Emergency` | User-facing name for tier 3, shown in the tier text sensor and logs |
 
 **Exposed entities:**
 - `sensor.{sensor_id}` - The abstracted sensor value from the active tier

@@ -1,7 +1,8 @@
 # =============================================================================
 # Component: failover_sensor.yaml
-# Purpose:   3-tier sensor failover (Primary → Secondary → Emergency) for
-#            reliable climate control when sensor sources fail
+# Purpose:   3-tier sensor failover (Primary → Secondary → Emergency, or any
+#            caller-relabeled tier names) for reliable climate control when
+#            sensor sources fail
 #
 # Required vars:
 #   sensor_id            - ID for the abstracted output sensor
@@ -15,6 +16,9 @@
 #   internal             - Hide from HA (default: true)
 #   accuracy_decimals    - Decimal precision (default: 1)
 #   update_interval      - How often to evaluate failover (default: 10s)
+#   primary_tier_label   - User-facing name for tier 1 (default: "Primary")
+#   secondary_tier_label - User-facing name for tier 2 (default: "Secondary")
+#   emergency_tier_label - User-facing name for tier 3 (default: "Emergency")
 #
 # Exposes:
 #   sensor.{sensor_id}              - Abstracted value from active tier
@@ -45,6 +49,9 @@ defaults:
   internal: "true"
   accuracy_decimals: "1"
   update_interval: "10s"
+  primary_tier_label: "Primary"
+  secondary_tier_label: "Secondary"
+  emergency_tier_label: "Emergency"
 
 sensor:
   - platform: template
@@ -63,16 +70,16 @@ sensor:
 
       // Tier 1: Primary sensor
       if (!isnan(id(${primary_sensor}).state)) {
-        current_tier = "Primary";
+        current_tier = "${primary_tier_label}";
         value = id(${primary_sensor}).state;
 
         if (last_tier != current_tier) {
-          if (last_tier == "Secondary") {
-            ESP_LOGI("failover", "[%s] Recovery: Secondary → Primary (primary sensor restored)", "${sensor_id}");
-          } else if (last_tier == "Emergency") {
-            ESP_LOGI("failover", "[%s] Recovery: Emergency → Primary (primary sensor restored)", "${sensor_id}");
+          if (last_tier == "${secondary_tier_label}") {
+            ESP_LOGI("failover", "[%s] Recovery: %s → %s (primary sensor restored)", "${sensor_id}", "${secondary_tier_label}", "${primary_tier_label}");
+          } else if (last_tier == "${emergency_tier_label}") {
+            ESP_LOGI("failover", "[%s] Recovery: %s → %s (primary sensor restored)", "${sensor_id}", "${emergency_tier_label}", "${primary_tier_label}");
           } else if (last_tier == "") {
-            ESP_LOGD("failover", "[%s] Initial state: Tier 1 (Primary)", "${sensor_id}");
+            ESP_LOGD("failover", "[%s] Initial state: Tier 1 (%s)", "${sensor_id}", "${primary_tier_label}");
           }
           last_tier = current_tier;
         }
@@ -83,16 +90,16 @@ sensor:
 
       // Tier 2: Secondary sensor (fallback)
       if (!isnan(id(${secondary_sensor}).state)) {
-        current_tier = "Secondary";
+        current_tier = "${secondary_tier_label}";
         value = id(${secondary_sensor}).state;
 
         if (last_tier != current_tier) {
-          if (last_tier == "Primary") {
-            ESP_LOGI("failover", "[%s] Failover: Primary → Secondary (primary sensor unavailable)", "${sensor_id}");
-          } else if (last_tier == "Emergency") {
-            ESP_LOGI("failover", "[%s] Recovery: Emergency → Secondary (secondary sensor restored)", "${sensor_id}");
+          if (last_tier == "${primary_tier_label}") {
+            ESP_LOGI("failover", "[%s] Failover: %s → %s (primary sensor unavailable)", "${sensor_id}", "${primary_tier_label}", "${secondary_tier_label}");
+          } else if (last_tier == "${emergency_tier_label}") {
+            ESP_LOGI("failover", "[%s] Recovery: %s → %s (secondary sensor restored)", "${sensor_id}", "${emergency_tier_label}", "${secondary_tier_label}");
           } else if (last_tier == "") {
-            ESP_LOGD("failover", "[%s] Initial state: Tier 2 (Secondary)", "${sensor_id}");
+            ESP_LOGD("failover", "[%s] Initial state: Tier 2 (%s)", "${sensor_id}", "${secondary_tier_label}");
           }
           last_tier = current_tier;
         }
@@ -102,15 +109,15 @@ sensor:
       }
 
       // Tier 3: Emergency (all sensors unavailable)
-      current_tier = "Emergency";
+      current_tier = "${emergency_tier_label}";
 
       if (last_tier != current_tier) {
-        if (last_tier == "Secondary") {
-          ESP_LOGE("failover", "[%s] Failover: Secondary → Emergency (all sensors unavailable)", "${sensor_id}");
-        } else if (last_tier == "Primary") {
-          ESP_LOGE("failover", "[%s] Failover: Primary → Emergency (all sensors unavailable)", "${sensor_id}");
+        if (last_tier == "${secondary_tier_label}") {
+          ESP_LOGE("failover", "[%s] Failover: %s → %s (all sensors unavailable)", "${sensor_id}", "${secondary_tier_label}", "${emergency_tier_label}");
+        } else if (last_tier == "${primary_tier_label}") {
+          ESP_LOGE("failover", "[%s] Failover: %s → %s (all sensors unavailable)", "${sensor_id}", "${primary_tier_label}", "${emergency_tier_label}");
         } else if (last_tier == "") {
-          ESP_LOGE("failover", "[%s] Initial state: Tier 3 (Emergency - no valid sensors)", "${sensor_id}");
+          ESP_LOGE("failover", "[%s] Initial state: Tier 3 (%s - no valid sensors)", "${sensor_id}", "${emergency_tier_label}");
         }
         last_tier = current_tier;
       }
