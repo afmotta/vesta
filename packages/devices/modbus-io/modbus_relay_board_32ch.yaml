@@ -40,15 +40,11 @@
 #                                Only id_offset: 0 is exercised by the committed
 #                                compile-checked example; the negative-offset
 #                                finding above has no persisted regression
-#                                check in this repo. No lower-bound guard and
-#                                no type check: id_offset below -1, or a
-#                                non-integer value, produces an invalid entity
-#                                id (e.g. relay_-1) with no compile-time error.
-#                                Must be passed as a numeric var (not a string
-#                                substitution) — ESPHome's jinja arithmetic
-#                                rejects string + int. No lower-bound guard:
-#                                id_offset below -1 produces an invalid entity
-#                                id (e.g. relay_-1) — caller's responsibility.
+#                                check in this repo. Must be passed as a numeric
+#                                var (not a string substitution): ESPHome's
+#                                jinja arithmetic rejects string + int. Valid
+#                                values are >= -1; below that, the generated
+#                                relay ids become invalid (e.g. relay_-1).
 #
 # Dependencies:
 #   - modbus_relay_switch.yaml (included automatically, must be in same directory)

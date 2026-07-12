@@ -33,12 +33,13 @@
 #   text_sensor.${seasonal_mode_id}_reason       - Why current mode was set
 #   text_sensor.${seasonal_mode_id}_season       - Current season classification
 #   binary_sensor.${seasonal_mode_id}_summer     - Compatibility: true when COOL
-#   binary_sensor.${heat_demand_id}              - Stub — extend with demand aggregation
-#   binary_sensor.${cool_demand_id}              - Stub — extend with demand aggregation
+#   binary_sensor.${heat_demand_id}              - Safe no-demand stub; extend with demand aggregation
+#   binary_sensor.${cool_demand_id}              - Safe no-demand stub; extend with demand aggregation
 #
 # Usage note:
-#   The demand binary sensors (heat_demand_id, cool_demand_id) are stubs with
-#   no lambda. Your device config MUST !extend them with actual demand logic:
+#   The demand binary sensors (heat_demand_id, cool_demand_id) default to false
+#   so omission is safe, but production devices MUST !extend them with actual
+#   demand logic:
 #
 #     binary_sensor:
 #       - id: !extend any_pid_requesting_heat
@@ -125,16 +126,20 @@ binary_sensor:
     lambda: |-
       return id(${seasonal_mode_id}).current_option() == "COOL";
 
-  # Global demand sensors — stubs that device config MUST !extend with actual logic
+  # Global demand sensors — safe stubs that production device configs MUST !extend
   - platform: template
     id: ${heat_demand_id}
     name: "Any PID Requesting Heat"
     device_class: heat
+    lambda: |-
+      return false;
 
   - platform: template
     id: ${cool_demand_id}
     name: "Any PID Requesting Cool"
     device_class: cold
+    lambda: |-
+      return false;
 
 script:
   - id: ${seasonal_mode_id}_check_calendar
