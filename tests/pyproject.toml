@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 # esphome is pinned deliberately; bumping it (and re-locking) doubles as a
 # compatibility test before raising min_version in the packages.
 dependencies = [
-    "esphome==2026.5.3",
+    "esphome==2026.6.5",
     "aioesphomeapi>=32.0.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
